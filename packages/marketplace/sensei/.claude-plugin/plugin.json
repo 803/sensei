@@ -6,28 +6,17 @@
 	"description": "Documentation research agent with Scout for repository exploration",
 	"keywords": [
 		"scout",
-		"kura",
 		"repo-map",
 		"code-exploration",
 		"documentation",
-		"research",
-		"cache"
+		"research"
 	],
 	"license": "MIT",
 	"mcpServers": {
-		"kura": {
-			"headers": {
-				"Authorization": "Bearer ${SENSEI_API_KEY}"
-			},
-			"type": "http",
-			"url": "${SENSEI_HOST:-http://localhost:8000}/kura/mcp"
-		},
 		"scout": {
-			"headers": {
-				"Authorization": "Bearer ${SENSEI_API_KEY}"
-			},
-			"type": "http",
-			"url": "${SENSEI_HOST:-http://localhost:8000}/scout/mcp"
+			"type": "stdio",
+			"command": "uvx",
+			"args": ["--from", "sensei-ai", "scout"]
 		}
 	},
 	"name": "sensei",

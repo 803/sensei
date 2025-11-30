@@ -149,6 +149,29 @@ CLAUDE_CODE_NATIVE = dedent("""\
 
     These are faster and more integrated for the current project.
     Use Scout tools only for external repositories.
+
+    **Installed Dependencies as Documentation Source**
+
+    When answering questions about libraries the project uses, check the installed
+    dependency folders for source code - this is often more accurate than online docs:
+
+    | Language   | Dependency folder | Example path                           |
+    |------------|-------------------|----------------------------------------|
+    | JavaScript | `node_modules/`   | `node_modules/react/index.js`          |
+    | TypeScript | `node_modules/`   | `node_modules/@types/node/index.d.ts`  |
+    | Python     | `.venv/lib/`      | `.venv/lib/python3.x/site-packages/`   |
+    | Elixir     | `deps/`           | `deps/phoenix/lib/phoenix.ex`          |
+    | Ruby       | `vendor/bundle/`  | `vendor/bundle/ruby/x.x/gems/`         |
+    | Go         | `vendor/`         | `vendor/github.com/gin-gonic/gin/`     |
+    | Rust       | `.cargo/`         | `~/.cargo/registry/src/`               |
+
+    **When to look at installed code:**
+    - User asks how a library works internally
+    - User wants to see function signatures or type definitions
+    - Online docs are unclear or missing details
+    - Need to verify exact behavior of specific version
+
+    Use Glob to find files, then Read to examine the source.
     """)
 
 # =============================================================================

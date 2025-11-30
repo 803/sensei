@@ -37,7 +37,10 @@ from .operations import (
 	list_files,
 	read_files,
 )
-from .repomap import RepoMapWrapper, generate_repo_map
+
+# DISABLED: aider-chat conflicts with pydantic-ai (openai version mismatch)
+# from .repomap import RepoMapWrapper, generate_repo_map
+
 from .server import scout
 
 __all__ = [
@@ -57,7 +60,7 @@ __all__ = [
 	"build_tree",
 	"list_files",
 	"TreeResult",
-	# RepoMap
-	"RepoMapWrapper",
-	"generate_repo_map",
+	# DISABLED: aider-chat conflicts with pydantic-ai (openai version mismatch)
+	# "RepoMapWrapper",
+	# "generate_repo_map",
 ]

@@ -21,7 +21,7 @@ SENSEI_MD = AGENTS_DIR / "sensei.md"
 # YAML frontmatter for the sub-agent
 FRONTMATTER = """\
 ---
-name: sensei
+name: sensei-researcher
 description: >-
   Use when researching documentation, exploring external GitHub repositories,
   or understanding how code works in codebases outside the current workspace.

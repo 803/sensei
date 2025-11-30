@@ -22,10 +22,12 @@ from .operations import (
 	build_tree,
 	glob_files,
 	grep_files,
-	list_files,
 	read_files,
 )
-from .repomap import generate_repo_map
+
+# DISABLED: aider-chat conflicts with pydantic-ai (openai version mismatch)
+# from .operations import list_files
+# from .repomap import generate_repo_map
 
 logger = logging.getLogger(__name__)
 
@@ -45,46 +47,49 @@ scout = FastMCP(name="scout")
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-@scout.tool
-async def repo_map(
-	url: Annotated[str, REPO_URL_FIELD],
-	ref: Annotated[str | None, REPO_REF_FIELD] = None,
-	path: Annotated[str, REPO_PATH_FIELD] = "",
-	max_tokens: Annotated[int, Field(description="Max tokens for the map", ge=256, le=8192)] = 2048,
-) -> str:
-	"""Get a structural map of the repository showing key classes, functions, and their signatures.
-
-	Use this first to understand a codebase's architecture before diving into specific files.
-	Returns symbols ranked by importance within the token budget.
-
-	The map shows:
-	- Class and function definitions with signatures
-	- File organization
-	- Key symbols ranked by how often they're referenced
-
-	Example output:
-	    src/core.py:
-	    │class Engine:
-	    │    def __init__(self, config: Config):
-	    │    async def run(self) -> Result:
-	    ⋮
-	    src/utils.py:
-	    │def parse_config(path: str) -> Config:
-	"""
-	async with with_repo(url, ref) as repo_path:
-		match await list_files(repo_path, path):
-			case Success(files) if not files:
-				return f"No files found in '{path or 'repository'}'."
-			case Success(files):
-				pass
-
-		logger.info(f"Generating repo map for {len(files)} files")
-
-		match generate_repo_map(repo_path, files, max_tokens):
-			case Success(result):
-				return result
-			case NoResults():
-				return "No symbols found (no parseable source files)."
+# DISABLED: aider-chat conflicts with pydantic-ai (openai version mismatch)
+# Re-enable when aider-chat updates its openai dependency.
+#
+# @scout.tool
+# async def repo_map(
+# 	url: Annotated[str, REPO_URL_FIELD],
+# 	ref: Annotated[str | None, REPO_REF_FIELD] = None,
+# 	path: Annotated[str, REPO_PATH_FIELD] = "",
+# 	max_tokens: Annotated[int, Field(description="Max tokens for the map", ge=256, le=8192)] = 2048,
+# ) -> str:
+# 	"""Get a structural map of the repository showing key classes, functions, and their signatures.
+#
+# 	Use this first to understand a codebase's architecture before diving into specific files.
+# 	Returns symbols ranked by importance within the token budget.
+#
+# 	The map shows:
+# 	- Class and function definitions with signatures
+# 	- File organization
+# 	- Key symbols ranked by how often they're referenced
+#
+# 	Example output:
+# 	    src/core.py:
+# 	    │class Engine:
+# 	    │    def __init__(self, config: Config):
+# 	    │    async def run(self) -> Result:
+# 	    ⋮
+# 	    src/utils.py:
+# 	    │def parse_config(path: str) -> Config:
+# 	"""
+# 	async with with_repo(url, ref) as repo_path:
+# 		match await list_files(repo_path, path):
+# 			case Success(files) if not files:
+# 				return f"No files found in '{path or 'repository'}'."
+# 			case Success(files):
+# 				pass
+#
+# 		logger.info(f"Generating repo map for {len(files)} files")
+#
+# 		match generate_repo_map(repo_path, files, max_tokens):
+# 			case Success(result):
+# 				return result
+# 			case NoResults():
+# 				return "No symbols found (no parseable source files)."
 
 
 @scout.tool
