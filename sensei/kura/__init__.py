@@ -4,7 +4,7 @@ Kura provides MCP tools to search and retrieve cached query responses:
 - search: Full-text search across cached queries
 - get: Retrieve a full cached response by ID
 
-All tools connect to the same SQLite database as the main Sensei app.
+All tools connect to the same PostgreSQL database as the main Sensei app.
 
 Usage as MCP server:
     from sensei.kura import kura

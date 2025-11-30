@@ -1,118 +1,96 @@
-"""Database operations for Sensei using SQLAlchemy with async support."""
+"""Database operations for Sensei using SQLAlchemy with async PostgreSQL."""
 
-import json
 import logging
+from datetime import UTC, datetime
 from typing import Optional
+from uuid import UUID
 
-from sqlalchemy import select, text
+from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from sensei.config import settings
-from sensei.database.models import Base, Query
+from sensei.database.models import Document, Query
 from sensei.database.models import Rating as RatingModel
-from sensei.types import CacheHit, Rating
+from sensei.types import CacheHit, Rating, SaveResult
 
 logger = logging.getLogger(__name__)
 
-# Create async engine
-engine = create_async_engine(
-	settings.database_url,
-	echo=False,
-	future=True,
-)
-
-# Create async session factory
-AsyncSessionLocal = async_sessionmaker(
-	engine,
-	class_=AsyncSession,
-	expire_on_commit=False,
-)
+# Lazy-initialized engine and session factory
+_engine = None
+_async_session_local = None
 
 
-async def init_db() -> None:
-	"""Initialize database by creating all tables and FTS5 index."""
-	logger.debug(f"Initializing database: {settings.database_url}")
-	async with engine.begin() as conn:
-		await conn.run_sync(Base.metadata.create_all)
-		# Create FTS5 virtual table for query search
-		await conn.execute(
-			text("""
-                CREATE VIRTUAL TABLE IF NOT EXISTS queries_fts USING fts5(
-                    query,
-                    content=queries,
-                    content_rowid=rowid
-                )
-            """)
+def _get_engine():
+	"""Get or create the async engine (lazy initialization)."""
+	global _engine
+	if _engine is None:
+		_engine = create_async_engine(
+			settings.database_url,
+			echo=False,
+			future=True,
 		)
-		# Triggers to keep FTS5 in sync
-		await conn.execute(
-			text("""
-                CREATE TRIGGER IF NOT EXISTS queries_insert AFTER INSERT ON queries BEGIN
-                    INSERT INTO queries_fts(rowid, query) VALUES (new.rowid, new.query);
-                END
-            """)
+	return _engine
+
+
+def _get_session_factory():
+	"""Get or create the async session factory (lazy initialization)."""
+	global _async_session_local
+	if _async_session_local is None:
+		_async_session_local = async_sessionmaker(
+			_get_engine(),
+			class_=AsyncSession,
+			expire_on_commit=False,
 		)
-		await conn.execute(
-			text("""
-                CREATE TRIGGER IF NOT EXISTS queries_delete AFTER DELETE ON queries BEGIN
-                    INSERT INTO queries_fts(queries_fts, rowid, query) VALUES ('delete', old.rowid, old.query);
-                END
-            """)
-		)
-		await conn.execute(
-			text("""
-                CREATE TRIGGER IF NOT EXISTS queries_update AFTER UPDATE ON queries BEGIN
-                    INSERT INTO queries_fts(queries_fts, rowid, query) VALUES ('delete', old.rowid, old.query);
-                    INSERT INTO queries_fts(rowid, query) VALUES (new.rowid, new.query);
-                END
-            """)
-		)
-	logger.info("Database initialized successfully (with FTS5)")
+	return _async_session_local
+
+
+def AsyncSessionLocal():
+	"""Get a session from the lazy-initialized factory."""
+	return _get_session_factory()()
 
 
 async def save_query(
-	query_id: str,
 	query: str,
 	output: str,
 	messages: bytes | None = None,
-	sources_used: Optional[list[str]] = None,
 	language: Optional[str] = None,
 	library: Optional[str] = None,
 	version: Optional[str] = None,
-	parent_query_id: Optional[str] = None,
+	parent_id: Optional[UUID] = None,
 	depth: int = 0,
-) -> None:
+) -> UUID:
 	"""Save a query and its response to the database.
 
 	Args:
-	    query_id: Unique identifier for the query
 	    query: The user's query string
 	    output: The final text output from the agent
 	    messages: JSON bytes of all intermediate messages (from result.new_messages_json())
-	    sources_used: Optional list of source names that were queried
 	    language: Optional programming language filter
 	    library: Optional library/framework name
 	    version: Optional version specification
-	    parent_query_id: Optional parent query ID for sub-queries
+	    parent_id: Optional parent query ID for sub-queries
 	    depth: Recursion depth (0 = top-level)
+
+	Returns:
+	    The generated UUID for the saved query
 	"""
-	logger.info(f"Saving query to database: query_id={query_id}, parent={parent_query_id}, depth={depth}")
+	logger.info(f"Saving query to database: parent={parent_id}, depth={depth}")
 	async with AsyncSessionLocal() as session:
 		query_record = Query(
-			query_id=query_id,
 			query=query,
 			language=language,
 			library=library,
 			version=version,
 			output=output,
 			messages=messages.decode("utf-8") if messages else None,
-			sources_used=json.dumps(sources_used) if sources_used else None,
-			parent_query_id=parent_query_id,
+			parent_id=parent_id,
 			depth=depth,
 		)
 		session.add(query_record)
 		await session.commit()
-	logger.debug(f"Query saved: query_id={query_id}, depth={depth}")
+		await session.refresh(query_record)
+		logger.debug(f"Query saved: id={query_record.id}, depth={depth}")
+		return query_record.id
 
 
 async def save_rating(rating: Rating) -> None:
@@ -136,61 +114,44 @@ async def save_rating(rating: Rating) -> None:
 	)
 
 
-async def get_query(query_id: str) -> Optional[Query]:
+async def get_query(id: UUID) -> Optional[Query]:
 	"""Retrieve a query by its ID.
 
 	Args:
-	    query_id: The query ID to retrieve
+	    id: The query ID to retrieve
 
 	Returns:
 	    Query object if found, None otherwise
 	"""
 	async with AsyncSessionLocal() as session:
-		result = await session.execute(select(Query).where(Query.query_id == query_id))
+		result = await session.execute(select(Query).where(Query.id == id))
 		return result.scalar_one_or_none()
 
 
-async def search_queries_fts(
+async def search_queries(
 	search_term: str,
-	library: Optional[str] = None,
-	version: Optional[str] = None,
 	limit: int = 10,
 ) -> list[CacheHit]:
-	"""Search cached queries using FTS5.
+	"""Search cached queries using ILIKE.
 
 	Args:
-	    search_term: The search term for full-text search
-	    library: Optional library filter
-	    version: Optional version filter
+	    search_term: The search term for text search
 	    limit: Maximum results to return
 
 	Returns:
-	    List of CacheHit objects sorted by relevance
+	    List of CacheHit objects
 	"""
-	from datetime import UTC, datetime
-
-	logger.debug(f"FTS search: term={search_term}, library={library}, version={version}")
+	logger.debug(f"Search: term={search_term}")
 
 	async with AsyncSessionLocal() as session:
-		# Build query with optional filters
+		params: dict = {"pattern": f"%{search_term}%", "limit": limit}
+
 		sql = """
-            SELECT q.query_id, q.query, q.library, q.version, q.created_at
-            FROM queries q
-            WHERE q.rowid IN (
-                SELECT rowid FROM queries_fts WHERE queries_fts MATCH :search_term
-            )
+            SELECT id, query, library, version, inserted_at
+            FROM queries
+            WHERE query ILIKE :pattern
+            LIMIT :limit
         """
-		params: dict = {"search_term": search_term}
-
-		if library:
-			sql += " AND q.library = :library"
-			params["library"] = library
-		if version:
-			sql += " AND q.version = :version"
-			params["version"] = version
-
-		sql += " LIMIT :limit"
-		params["limit"] = limit
 
 		result = await session.execute(text(sql), params)
 		rows = result.fetchall()
@@ -198,13 +159,9 @@ async def search_queries_fts(
 		now = datetime.now(UTC)
 		hits = []
 		for row in rows:
-			query_id, query_text, lib, ver, created_at = row
-			# Parse datetime if it's a string (from raw SQL)
-			if isinstance(created_at, str):
-				created_at = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
-			if created_at and created_at.tzinfo is None:
-				created_at = created_at.replace(tzinfo=UTC)
-			age_days = (now - created_at).days if created_at else 0
+			query_id, query_text, lib, ver, inserted_at = row
+			# inserted_at is timezone-aware from DB, no coercion needed
+			age_days = (now - inserted_at).days if inserted_at else 0
 			hits.append(
 				CacheHit(
 					query_id=query_id,
@@ -215,3 +172,121 @@ async def search_queries_fts(
 				)
 			)
 		return hits
+
+
+async def save_document(
+	domain: str,
+	url: str,
+	path: str,
+	content: str,
+	content_hash: str,
+	depth: int,
+) -> SaveResult:
+	"""Save or update a document using upsert logic.
+
+	If a document with the same URL exists:
+	  - If content_hash matches, skip (SKIPPED)
+	  - If content_hash differs, update (UPDATED)
+	Otherwise, insert new document (INSERTED)
+
+	Args:
+	    domain: Source domain (e.g., "react.dev")
+	    url: Full URL of the document
+	    path: Path portion of the URL
+	    content: Markdown content
+	    content_hash: Hash for change detection
+	    depth: Crawl depth (0 = llms.txt, 1+ = linked)
+
+	Returns:
+	    SaveResult indicating what action was taken
+	"""
+	async with AsyncSessionLocal() as session:
+		result = await session.execute(select(Document).where(Document.url == url))
+		existing = result.scalar_one_or_none()
+
+		if existing:
+			if existing.content_hash == content_hash:
+				logger.debug(f"Document unchanged, skipping: {url}")
+				return SaveResult.SKIPPED
+			existing.content = content
+			existing.content_hash = content_hash
+			existing.depth = depth
+			existing.content_refreshed_at = datetime.now(UTC)
+			await session.commit()
+			logger.info(f"Document updated: {url}")
+			return SaveResult.UPDATED
+
+		doc = Document(
+			domain=domain,
+			url=url,
+			path=path,
+			content=content,
+			content_hash=content_hash,
+			depth=depth,
+		)
+		session.add(doc)
+		await session.commit()
+		logger.info(f"Document saved: {url}")
+		return SaveResult.INSERTED
+
+
+async def get_document_by_url(url: str) -> Optional[Document]:
+	"""Retrieve a document by its URL.
+
+	Args:
+	    url: The full URL of the document
+
+	Returns:
+	    Document if found, None otherwise
+	"""
+	async with AsyncSessionLocal() as session:
+		result = await session.execute(select(Document).where(Document.url == url))
+		return result.scalar_one_or_none()
+
+
+async def search_documents(
+	query: str,
+	domain: Optional[str] = None,
+	limit: int = 10,
+) -> list[Document]:
+	"""Search documents by content.
+
+	Args:
+	    query: Search term
+	    domain: Optional domain filter
+	    limit: Maximum results
+
+	Returns:
+	    List of matching Document objects
+	"""
+	async with AsyncSessionLocal() as session:
+		stmt = select(Document)
+
+		if domain:
+			stmt = stmt.where(Document.domain == domain)
+
+		# Use icontains with autoescape for safe wildcard handling
+		stmt = stmt.where(Document.content.icontains(query, autoescape=True))
+		stmt = stmt.limit(limit)
+
+		result = await session.execute(stmt)
+		return list(result.scalars().all())
+
+
+async def delete_documents_by_domain(domain: str) -> int:
+	"""Delete all documents for a domain.
+
+	Useful for re-crawling a domain from scratch.
+
+	Args:
+	    domain: The domain to delete documents for
+
+	Returns:
+	    Number of documents deleted
+	"""
+	async with AsyncSessionLocal() as session:
+		result = await session.execute(delete(Document).where(Document.domain == domain))
+		await session.commit()
+		count = result.rowcount
+		logger.info(f"Deleted {count} documents for domain: {domain}")
+		return count
