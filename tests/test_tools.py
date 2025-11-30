@@ -1,7 +1,5 @@
 """Tests for tools with dependency-injected HTTP client."""
 
-from unittest.mock import AsyncMock
-
 import pytest
 
 from sensei.deps import Deps
@@ -9,26 +7,31 @@ from sensei.tools.exec_plan import add_exec_plan, update_exec_plan
 
 
 class DummyCtx:
-	def __init__(self, client):
-		self.deps = Deps(http_client=client)
+	def __init__(self):
+		self.deps = Deps()
 
 
 @pytest.mark.asyncio
 async def test_exec_plan_add_and_update():
-	ctx = DummyCtx(AsyncMock())
-	ctx.deps.query_id = "q-123"
+	ctx = DummyCtx()
 
 	add_result = await add_exec_plan(ctx)
-	assert "ExecPlan template added" in add_result
+	assert "ExecPlan template added" in add_result.data
+	# Plan is now stored directly in deps
+	assert ctx.deps.exec_plan is not None
+	assert "Documentation Research ExecPlan" in ctx.deps.exec_plan
 
-	updated = "# plan"
+	updated = "# Updated plan"
 	update_result = await update_exec_plan(ctx, updated)
-	assert "ExecPlan updated" in update_result
+	assert "ExecPlan updated" in update_result.data
+	assert ctx.deps.exec_plan == updated
 
 
 @pytest.mark.asyncio
 async def test_exec_plan_update_without_plan():
-	ctx = DummyCtx(AsyncMock())
-	ctx.deps.query_id = "q-456"
+	ctx = DummyCtx()
+	# No exec_plan set, so update should return NoResults
+	from sensei.types import NoResults
+
 	result = await update_exec_plan(ctx, "# plan")
-	assert "No ExecPlan exists" in result
+	assert isinstance(result, NoResults)

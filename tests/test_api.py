@@ -108,7 +108,7 @@ async def test_rate_endpoint_success(client):
 		response = client.post(
 			"/rate",
 			json={
-				"query_id": "test-query-123",
+				"query_id": "12345678-1234-5678-1234-567812345678",
 				"correctness": 5,
 				"relevance": 4,
 				"usefulness": 5,
@@ -134,7 +134,7 @@ async def test_rate_endpoint_without_feedback(client):
 		response = client.post(
 			"/rate",
 			json={
-				"query_id": "test-query-456",
+				"query_id": "22222222-2222-2222-2222-222222222222",
 				"correctness": 3,
 				"relevance": 3,
 				"usefulness": 2,

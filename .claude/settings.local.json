@@ -32,7 +32,8 @@
 			"WebFetch(domain:llmstxt.org)",
 			"WebFetch(domain:render.com)",
 			"WebFetch(domain:www.firecrawl.dev)",
-			"WebSearch"
+			"WebSearch",
+			"mcp__beads__show"
 		],
 		"ask": [],
 		"deny": []

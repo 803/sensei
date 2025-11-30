@@ -1,6 +1,7 @@
 """Tests for the FastMCP server."""
 
 from unittest.mock import AsyncMock
+from uuid import UUID
 
 import pytest
 import pytest_asyncio
@@ -30,10 +31,11 @@ async def test_list_tools(mcp_client: Client):
 @pytest.mark.asyncio
 async def test_query_tool_success(mcp_client: Client, monkeypatch):
 	"""Test successful query tool call."""
+	test_uuid = UUID("12345678-1234-5678-1234-567812345678")
 	monkeypatch.setattr(
 		"sensei.core.handle_query",
 		AsyncMock(
-			return_value=QueryResult(query_id="test-123", markdown="# Test Response\n\nHere's the documentation...")
+			return_value=QueryResult(query_id=test_uuid, markdown="# Test Response\n\nHere's the documentation...")
 		),
 	)
 
@@ -63,7 +65,7 @@ async def test_feedback_tool_success(mcp_client: Client, monkeypatch):
 	result = await mcp_client.call_tool(
 		"feedback",
 		{
-			"query_id": "test-123",
+			"query_id": "12345678-1234-5678-1234-567812345678",
 			"correctness": 5,
 			"relevance": 4,
 			"usefulness": 5,
@@ -83,7 +85,7 @@ async def test_feedback_tool_error(mcp_client: Client, monkeypatch):
 	with pytest.raises(ToolError, match="Failed to save rating"):
 		await mcp_client.call_tool(
 			"feedback",
-			{"query_id": "test-123", "correctness": 3, "relevance": 3, "usefulness": 3},
+			{"query_id": "12345678-1234-5678-1234-567812345678", "correctness": 3, "relevance": 3, "usefulness": 3},
 		)
 
 

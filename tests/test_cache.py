@@ -1,6 +1,8 @@
 """Tests for cache operations."""
 
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import UUID
 
 import pytest
 
@@ -9,22 +11,26 @@ from sensei.types import CacheHit, SubSenseiResult
 
 def test_cache_hit_model():
 	"""Test CacheHit domain model."""
+	test_uuid = UUID("12345678-1234-5678-1234-567812345678")
 	hit = CacheHit(
-		query_id="q-123",
+		query_id=test_uuid,
 		query_truncated="How do React hooks...",
 		age_days=5,
 		library="react",
 		version="18.0",
 	)
-	assert hit.query_id == "q-123"
+	assert hit.query_id == test_uuid
 	assert hit.age_days == 5
 
 
 def test_sub_sensei_result_model():
 	"""Test SubSenseiResult domain model."""
+	uuid1 = UUID("12345678-1234-5678-1234-567812345678")
+	uuid2 = UUID("87654321-4321-8765-4321-876543218765")
+
 	# From cache
 	result_cached = SubSenseiResult(
-		query_id="q-456",
+		query_id=uuid1,
 		response_markdown="# Answer\n\n...",
 		from_cache=True,
 		age_days=10,
@@ -34,7 +40,7 @@ def test_sub_sensei_result_model():
 
 	# Fresh result
 	result_fresh = SubSenseiResult(
-		query_id="q-789",
+		query_id=uuid2,
 		response_markdown="# Fresh Answer\n\n...",
 		from_cache=False,
 		age_days=None,
@@ -55,34 +61,36 @@ def test_cache_config_defaults():
 @pytest.mark.asyncio
 async def test_search_cache_tool():
 	"""Test search_cache tool returns formatted results."""
+	uuid1 = UUID("11111111-1111-1111-1111-111111111111")
+	uuid2 = UUID("22222222-2222-2222-2222-222222222222")
 	mock_hits = [
-		CacheHit(query_id="q1", query_truncated="React hooks...", age_days=5, library="react", version="18"),
-		CacheHit(query_id="q2", query_truncated="React state...", age_days=10, library="react", version=None),
+		CacheHit(query_id=uuid1, query_truncated="React hooks...", age_days=5, library="react", version="18"),
+		CacheHit(query_id=uuid2, query_truncated="React state...", age_days=10, library="react", version=None),
 	]
 
-	with patch("sensei.tools.cache.storage.search_queries_fts", new_callable=AsyncMock) as mock_search:
+	with patch("sensei.kura.tools.storage.search_queries", new_callable=AsyncMock) as mock_search:
 		mock_search.return_value = mock_hits
 
-		from sensei.tools.cache import search_cache
+		from sensei.kura.tools import search_cache
 
-		result = await search_cache("React hooks", library="react", limit=5)
+		result = await search_cache("React hooks", limit=5)
 
-		mock_search.assert_called_once_with("React hooks", library="react", version=None, limit=5)
+		mock_search.assert_called_once_with("React hooks", limit=5)
 		from sensei.types import Success
 
 		assert isinstance(result, Success)
-		assert "q1" in result.data
+		assert str(uuid1) in result.data
 		assert "5 days" in result.data
-		assert "q2" in result.data
+		assert str(uuid2) in result.data
 
 
 @pytest.mark.asyncio
 async def test_search_cache_no_results():
 	"""Test search_cache returns NoResults when empty."""
-	with patch("sensei.tools.cache.storage.search_queries_fts", new_callable=AsyncMock) as mock_search:
+	with patch("sensei.kura.tools.storage.search_queries", new_callable=AsyncMock) as mock_search:
 		mock_search.return_value = []
 
-		from sensei.tools.cache import search_cache
+		from sensei.kura.tools import search_cache
 
 		result = await search_cache("nonexistent")
 
@@ -94,39 +102,37 @@ async def test_search_cache_no_results():
 @pytest.mark.asyncio
 async def test_get_cached_response_tool():
 	"""Test get_cached_response returns full cached data."""
-	from datetime import UTC, datetime
-
+	test_uuid = UUID("12345678-1234-5678-1234-567812345678")
 	mock_query = MagicMock()
-	mock_query.query_id = "q1"
+	mock_query.id = test_uuid
 	mock_query.query = "How do React hooks work?"
 	mock_query.output = "# React Hooks\n\nHooks are..."
-	mock_query.sources_used = '["context7", "tavily"]'
-	mock_query.created_at = datetime.now(UTC)
+	mock_query.inserted_at = datetime.now(UTC)
 
-	with patch("sensei.tools.cache.storage.get_query", new_callable=AsyncMock) as mock_get:
+	with patch("sensei.kura.tools.storage.get_query", new_callable=AsyncMock) as mock_get:
 		mock_get.return_value = mock_query
 
-		from sensei.tools.cache import get_cached_response
+		from sensei.kura.tools import get_cached_response
 
-		result = await get_cached_response("q1")
+		result = await get_cached_response(test_uuid)
 
-		mock_get.assert_called_once_with("q1")
+		mock_get.assert_called_once_with(test_uuid)
 		from sensei.types import Success
 
 		assert isinstance(result, Success)
 		assert "React Hooks" in result.data
-		assert "context7" in result.data
 
 
 @pytest.mark.asyncio
 async def test_get_cached_response_not_found():
 	"""Test get_cached_response returns NoResults when not found."""
-	with patch("sensei.tools.cache.storage.get_query", new_callable=AsyncMock) as mock_get:
+	fake_uuid = UUID("00000000-0000-0000-0000-000000000000")
+	with patch("sensei.kura.tools.storage.get_query", new_callable=AsyncMock) as mock_get:
 		mock_get.return_value = None
 
-		from sensei.tools.cache import get_cached_response
+		from sensei.kura.tools import get_cached_response
 
-		result = await get_cached_response("nonexistent")
+		result = await get_cached_response(fake_uuid)
 
 		from sensei.types import NoResults
 
@@ -137,13 +143,15 @@ def test_deps_has_cache_fields():
 	"""Test Deps has fields for sub-sensei context."""
 	from sensei.deps import Deps
 
+	query_uuid = UUID("11111111-1111-1111-1111-111111111111")
+	parent_uuid = UUID("22222222-2222-2222-2222-222222222222")
 	deps = Deps(
-		query_id="q1",
-		parent_query_id="parent-q",
+		query_id=query_uuid,
+		parent_id=parent_uuid,
 		current_depth=1,
 		max_depth=2,
 	)
-	assert deps.parent_query_id == "parent-q"
+	assert deps.parent_id == parent_uuid
 	assert deps.current_depth == 1
 	assert deps.max_depth == 2
 
@@ -152,15 +160,16 @@ def test_deps_cache_fields_default():
 	"""Test Deps cache fields have sensible defaults."""
 	from sensei.deps import Deps
 
-	deps = Deps(query_id="q1")
-	assert deps.parent_query_id is None
+	query_uuid = UUID("11111111-1111-1111-1111-111111111111")
+	deps = Deps(query_id=query_uuid)
+	assert deps.parent_id is None
 	assert deps.current_depth == 0
 	assert deps.max_depth == 2
 
 
 def test_create_sub_agent_exists():
 	"""Test create_sub_agent factory function exists."""
-	from sensei.tools.sub_agent import create_sub_agent
+	from sensei.agent import create_sub_agent
 
 	# Just verify the function exists and is callable
 	assert callable(create_sub_agent)
@@ -169,8 +178,9 @@ def test_create_sub_agent_exists():
 @pytest.mark.asyncio
 async def test_spawn_sub_agent_tool_exists():
 	"""Test spawn_sub_agent tool exists and has correct signature."""
-	from sensei.tools.sub_agent import spawn_sub_agent
 	import inspect
+
+	from sensei.agent import spawn_sub_agent
 
 	sig = inspect.signature(spawn_sub_agent)
 	params = list(sig.parameters.keys())
@@ -181,13 +191,15 @@ async def test_spawn_sub_agent_tool_exists():
 @pytest.mark.asyncio
 async def test_spawn_sub_agent_checks_depth():
 	"""Test spawn_sub_agent respects max depth."""
-	from sensei.tools.sub_agent import spawn_sub_agent
-	from sensei.deps import Deps
 	from pydantic_ai import RunContext
 
+	from sensei.agent import spawn_sub_agent
+	from sensei.deps import Deps
+
 	# Create mock context at max depth
+	query_uuid = UUID("11111111-1111-1111-1111-111111111111")
 	mock_ctx = MagicMock(spec=RunContext)
-	mock_ctx.deps = Deps(query_id="q1", current_depth=2, max_depth=2)
+	mock_ctx.deps = Deps(query_id=query_uuid, current_depth=2, max_depth=2)
 
 	result = await spawn_sub_agent(mock_ctx, "What is X?")
 
@@ -216,7 +228,8 @@ def test_cache_prompt_includes_cache_instructions():
 @pytest.mark.asyncio
 async def test_prefetch_cache_instruction():
 	"""Test pre-fetch cache instruction function exists."""
-	from sensei.agent import prefetch_cache_hits
 	import inspect
+
+	from sensei.agent import prefetch_cache_hits
 
 	assert inspect.iscoroutinefunction(prefetch_cache_hits)

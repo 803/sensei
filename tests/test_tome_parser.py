@@ -1,0 +1,132 @@
+"""Tests for Tome parser functionality."""
+
+from sensei.tome.crawler import is_markdown_content
+from sensei.tome.parser import (
+	extract_domain,
+	extract_path,
+	is_same_domain,
+	parse_llms_txt_links,
+)
+from sensei.types import Domain
+
+
+def test_parse_llms_txt_links_extracts_markdown_links():
+	content = """
+# Example Docs
+
+> Some description
+
+## Getting Started
+- [Quick Start](/docs/quickstart.md)
+- [Installation](https://example.com/docs/install.md)
+
+## API
+- [Reference](/api/ref.md)
+"""
+	links = parse_llms_txt_links(content, "https://example.com/llms.txt")
+	assert len(links) == 3
+	assert "https://example.com/docs/quickstart.md" in links
+	assert "https://example.com/docs/install.md" in links
+	assert "https://example.com/api/ref.md" in links
+
+
+def test_parse_llms_txt_links_ignores_anchor_only_links():
+	content = "[Jump to section](#section)"
+	links = parse_llms_txt_links(content, "https://example.com/llms.txt")
+	assert len(links) == 0
+
+
+def test_is_same_domain_returns_true_for_same_domain():
+	assert is_same_domain("https://example.com/llms.txt", "https://example.com/docs/install.md")
+
+
+def test_is_same_domain_returns_false_for_different_domain():
+	assert not is_same_domain("https://example.com/llms.txt", "https://other.com/docs/")
+
+
+def test_extract_domain():
+	assert extract_domain("https://react.dev/docs/hooks.md") == "react.dev"
+	# Subdomains resolve to registrable domain
+	assert extract_domain("https://api.example.com/v1/") == "example.com"
+
+
+def test_extract_path():
+	assert extract_path("https://react.dev/docs/hooks.md") == "/docs/hooks.md"
+	assert extract_path("https://example.com/") == "/"
+
+
+# =============================================================================
+# Domain value object tests
+# =============================================================================
+
+
+def test_domain_strips_www():
+	assert Domain("www.example.com").value == "example.com"
+	assert Domain("https://www.example.com/path").value == "example.com"
+
+
+def test_domain_resolves_subdomains_to_registrable():
+	"""Subdomains should resolve to the registrable domain."""
+	assert Domain("api.example.com").value == "example.com"
+	assert Domain("docs.api.example.com").value == "example.com"
+	assert Domain("https://cdn.docs.example.com/file.js").value == "example.com"
+
+
+def test_domain_handles_country_code_tlds():
+	"""Country-code TLDs like .co.uk should be handled correctly."""
+	assert Domain("bbc.co.uk").value == "bbc.co.uk"
+	assert Domain("forums.bbc.co.uk").value == "bbc.co.uk"
+	assert Domain("https://www.bbc.co.uk/news").value == "bbc.co.uk"
+
+
+def test_domain_equality():
+	"""Different URLs with same registrable domain should be equal."""
+	assert Domain("example.com") == Domain("www.example.com")
+	assert Domain("api.example.com") == Domain("docs.example.com")
+	assert Domain("https://example.com") == Domain("http://www.example.com:8080/path")
+
+
+def test_domain_inequality():
+	"""Different registrable domains should not be equal."""
+	assert Domain("example.com") != Domain("example.org")
+	assert Domain("bbc.co.uk") != Domain("cnn.com")
+
+
+def test_is_same_domain_with_subdomains():
+	"""is_same_domain should match subdomains of the same registrable domain."""
+	assert is_same_domain("https://example.com/", "https://api.example.com/docs")
+	assert is_same_domain("https://docs.example.com/", "https://www.example.com/")
+	assert is_same_domain("https://forums.bbc.co.uk/", "https://news.bbc.co.uk/")
+
+
+# =============================================================================
+# Content type validation tests
+# =============================================================================
+
+
+def test_is_markdown_content_accepts_markdown():
+	"""Accept standard markdown content types."""
+	assert is_markdown_content("text/markdown")
+	assert is_markdown_content("text/x-markdown")
+	assert is_markdown_content("text/plain")
+
+
+def test_is_markdown_content_accepts_with_charset():
+	"""Accept content types with charset parameters."""
+	assert is_markdown_content("text/markdown; charset=utf-8")
+	assert is_markdown_content("text/plain; charset=utf-8")
+	assert is_markdown_content("text/plain;charset=UTF-8")
+
+
+def test_is_markdown_content_rejects_html():
+	"""Reject HTML and other non-markdown types."""
+	assert not is_markdown_content("text/html")
+	assert not is_markdown_content("text/html; charset=utf-8")
+	assert not is_markdown_content("application/json")
+	assert not is_markdown_content("image/png")
+
+
+def test_is_markdown_content_accepts_none():
+	"""Accept None content type (trust the URL)."""
+	assert is_markdown_content(None)
+	assert is_markdown_content("")
