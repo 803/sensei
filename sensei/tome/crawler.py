@@ -1,17 +1,32 @@
-"""Crawler for llms.txt documentation sources using Crawlee."""
+"""Crawler for llms.txt documentation sources using Crawlee.
+
+Generation-based crawling:
+1. Each crawl creates a new generation (UUID)
+2. All documents are inserted with generation_active=false
+3. After crawl completes, atomically swap: activate new generation, deactivate old
+4. Cleanup deletes inactive documents
+
+This ensures queries always see a complete, consistent set of documents.
+"""
 
 import hashlib
 import logging
 from datetime import timedelta
+from uuid import uuid4
 
 from crawlee import ConcurrencySettings, Request
 from crawlee.crawlers import HttpCrawler, HttpCrawlingContext
 from crawlee.storage_clients import MemoryStorageClient
 
-from sensei.database.storage import save_document_metadata, save_sections
+from sensei.database.storage import (
+    activate_generation,
+    cleanup_old_generations,
+    insert_document,
+    save_sections,
+)
 from sensei.tome.chunker import chunk_markdown
 from sensei.tome.parser import extract_path, is_same_domain, parse_llms_txt_links
-from sensei.types import Domain, IngestResult, SaveResult, Success, TransientError
+from sensei.types import Domain, IngestResult, Success, TransientError
 
 logger = logging.getLogger(__name__)
 
@@ -26,140 +41,160 @@ ALLOWED_CONTENT_TYPES = frozenset({"text/markdown", "text/plain", "text/x-markdo
 
 
 def content_hash(content: str) -> str:
-	"""Generate a hash for content change detection."""
-	return hashlib.sha256(content.encode()).hexdigest()[:16]
+    """Generate a hash for content change detection."""
+    return hashlib.sha256(content.encode()).hexdigest()[:16]
 
 
 def is_markdown_content(content_type: str | None) -> bool:
-	"""Check if content type indicates markdown or plain text.
+    """Check if content type indicates markdown or plain text.
 
-	Args:
-	    content_type: The Content-Type header value (may include charset)
+    Args:
+        content_type: The Content-Type header value (may include charset)
 
-	Returns:
-	    True if content type is acceptable for markdown content
-	"""
-	if not content_type:
-		return False
-	# Extract media type (ignore charset and other parameters)
-	media_type = content_type.split(";")[0].strip().lower()
-	return media_type in ALLOWED_CONTENT_TYPES
+    Returns:
+        True if content type is acceptable for markdown content
+    """
+    if not content_type:
+        return False
+    # Extract media type (ignore charset and other parameters)
+    media_type = content_type.split(";")[0].strip().lower()
+    return media_type in ALLOWED_CONTENT_TYPES
 
 
 async def ingest_domain(domain: str, max_depth: int = 3) -> Success[IngestResult]:
-	"""Ingest documentation from a domain's llms.txt file.
+    """Ingest documentation from a domain's llms.txt file.
 
-	Fetches /llms.txt from the domain, parses it to extract links, then crawls
-	all same-domain linked documents up to max_depth.
+    Fetches /llms.txt from the domain, parses it to extract links, then crawls
+    all same-domain linked documents up to max_depth.
 
-	Documents are chunked by markdown headings and stored as sections for
-	efficient full-text search and granular retrieval.
+    Uses generation-based crawling for atomic visibility:
+    1. Creates a new generation UUID for this crawl
+    2. Inserts all documents with generation_active=false
+    3. After crawl completes, atomically activates the new generation
+    4. Cleans up old (inactive) documents
 
-	Args:
-	    domain: The domain to crawl (e.g., "react.dev"). Can be a full URL -
-	            will be normalized automatically.
-	    max_depth: Maximum link depth to follow. 0 means only fetch llms.txt
-	            (no linked documents). 1 means fetch llms.txt plus direct links.
-	            Default is 3.
+    Args:
+        domain: The domain to crawl (e.g., "react.dev"). Can be a full URL -
+                will be normalized automatically.
+        max_depth: Maximum link depth to follow. 0 means only fetch llms.txt
+                (no linked documents). 1 means fetch llms.txt plus direct links.
+                Default is 3.
 
-	Returns:
-	    Success[IngestResult] with counts of documents processed
+    Returns:
+        Success[IngestResult] with counts of documents processed
 
-	Raises:
-	    TransientError: If the crawl fails due to network issues
-	"""
-	# Normalize domain (handles full URLs, www prefix, ports, etc.)
-	normalized_domain = Domain(domain).value
-	result = IngestResult(domain=normalized_domain)
+    Raises:
+        TransientError: If the crawl fails due to network issues
+    """
+    # Normalize domain (handles full URLs, www prefix, ports, etc.)
+    normalized_domain = Domain(domain).value
+    result = IngestResult(domain=normalized_domain)
 
-	# Start with llms.txt - the standard entry point for documentation
-	initial_urls = [
-		f"https://{normalized_domain}/llms.txt",
-	]
+    # Create a new generation for this crawl
+    generation_id = uuid4()
+    logger.info(f"Starting crawl for {normalized_domain} with generation {generation_id}")
 
-	# Use MemoryStorageClient to avoid filesystem race conditions between crawls
-	# This eliminates the need for cleanup and prevents state conflicts
-	storage_client = MemoryStorageClient()
+    # Start with llms.txt - the standard entry point for documentation
+    initial_urls = [
+        f"https://{normalized_domain}/llms.txt",
+    ]
 
-	crawler = HttpCrawler(
-		max_requests_per_crawl=MAX_REQUESTS_PER_CRAWL,
-		request_handler_timeout=REQUEST_TIMEOUT,
-		concurrency_settings=CONCURRENCY,
-		storage_client=storage_client,
-	)
+    # Use MemoryStorageClient to avoid filesystem race conditions between crawls
+    # This eliminates the need for cleanup and prevents state conflicts
+    storage_client = MemoryStorageClient()
 
-	@crawler.router.default_handler
-	async def handle_document(context: HttpCrawlingContext) -> None:
-		"""Handle any markdown document (llms.txt or linked docs)."""
-		# Use loaded_url (after redirects) for accurate domain matching
-		url = context.request.loaded_url or context.request.url
-		current_depth = context.request.user_data.get("depth", 0)
-		logger.info(f"Processing document (depth={current_depth}): {url}")
+    crawler = HttpCrawler(
+        max_requests_per_crawl=MAX_REQUESTS_PER_CRAWL,
+        request_handler_timeout=REQUEST_TIMEOUT,
+        concurrency_settings=CONCURRENCY,
+        storage_client=storage_client,
+    )
 
-		# Check content type before reading body
-		content_type = context.http_response.headers.get("content-type")
-		if not is_markdown_content(content_type):
-			logger.warning(f"Skipping non-markdown content type '{content_type}': {url}")
-			result.errors.append(f"Invalid content type '{content_type}': {url}")
-			return
+    @crawler.router.default_handler
+    async def handle_document(context: HttpCrawlingContext) -> None:
+        """Handle any markdown document (llms.txt or linked docs)."""
+        # Use loaded_url (after redirects) for accurate domain matching
+        url = context.request.loaded_url or context.request.url
+        current_depth = context.request.user_data.get("depth", 0)
+        logger.info(f"Processing document (depth={current_depth}): {url}")
 
-		try:
-			content = (await context.http_response.read()).decode("utf-8")
-		except UnicodeDecodeError:
-			logger.warning(f"Skipping non-text content: {url}")
-			result.errors.append(f"Non-text content: {url}")
-			return
+        # Check content type before reading body
+        content_type = context.http_response.headers.get("content-type")
+        if not is_markdown_content(content_type):
+            logger.warning(f"Skipping non-markdown content type '{content_type}': {url}")
+            result.errors.append(f"Invalid content type '{content_type}': {url}")
+            return
 
-		# Save document metadata (no content - that goes in sections)
-		hash_value = content_hash(content)
-		save_result, doc_id = await save_document_metadata(
-			domain=normalized_domain,
-			url=url,
-			path=extract_path(url),
-			content_hash=hash_value,
-			depth=current_depth,
-		)
+        try:
+            content = (await context.http_response.read()).decode("utf-8")
+        except UnicodeDecodeError:
+            logger.warning(f"Skipping non-text content: {url}")
+            result.errors.append(f"Non-text content: {url}")
+            return
 
-		match save_result:
-			case SaveResult.INSERTED:
-				result.documents_added += 1
-			case SaveResult.UPDATED:
-				result.documents_updated += 1
-			case SaveResult.SKIPPED:
-				result.documents_skipped += 1
+        # Insert document for this generation (not yet visible to queries)
+        hash_value = content_hash(content)
+        doc_id = await insert_document(
+            domain=normalized_domain,
+            url=url,
+            path=extract_path(url),
+            content_hash=hash_value,
+            generation_id=generation_id,
+        )
+        result.documents_added += 1
 
-		# Only chunk and save sections if document was inserted or updated
-		if save_result != SaveResult.SKIPPED and doc_id:
-			# Chunk markdown into sections
-			sections = chunk_markdown(content)
-			# Save sections with parent relationships
-			await save_sections(doc_id, sections)
-			logger.debug(f"Saved sections for {url}")
+        # Chunk markdown and save sections
+        sections = chunk_markdown(content)
+        await save_sections(doc_id, sections)
+        logger.debug(f"Saved sections for {url}")
 
-		# Parse links and enqueue same-domain ones if within depth limit
-		if current_depth < max_depth:
-			all_links = parse_llms_txt_links(content, url)
-			same_domain_links = [link for link in all_links if is_same_domain(url, link)]
-			if same_domain_links:
-				logger.info(f"Found {len(all_links)} links, {len(same_domain_links)} same-domain, enqueueing")
-				requests = [
-					Request.from_url(link, user_data={"depth": current_depth + 1}) for link in same_domain_links
-				]
-				await context.add_requests(requests)
+        # Parse links and enqueue same-domain ones if within depth limit
+        if current_depth < max_depth:
+            all_links = parse_llms_txt_links(content, url)
+            same_domain_links = [link for link in all_links if is_same_domain(url, link)]
+            other_domain_links = [link for link in all_links if not is_same_domain(url, link)]
 
-	# Start crawl with llms.txt (depth=0)
-	try:
-		initial_requests = [Request.from_url(url, user_data={"depth": 0}) for url in initial_urls]
-		await crawler.run(initial_requests)
-	except Exception as e:
-		logger.error(f"Crawl failed for {normalized_domain}: {e}")
-		raise TransientError(f"Crawl failed for {normalized_domain}: {e}") from e
+            # Debug logging for link analysis
+            logger.debug(f"=== Link analysis for {url} ===")
+            logger.debug(f"Same-domain links ({len(same_domain_links)}):")
+            for link in same_domain_links:
+                logger.debug(f"  ✓ {link}")
+            logger.debug(f"Other-domain links ({len(other_domain_links)}):")
+            for link in other_domain_links:
+                logger.debug(f"  ✗ {link}")
 
-	logger.info(
-		f"Ingest complete for {normalized_domain}: "
-		f"added={result.documents_added}, "
-		f"updated={result.documents_updated}, "
-		f"skipped={result.documents_skipped}, "
-		f"errors={len(result.errors)}"
-	)
-	return Success(result)
+            if same_domain_links:
+                logger.info(f"Found {len(all_links)} links, {len(same_domain_links)} same-domain, enqueueing")
+                requests = [
+                    Request.from_url(link, user_data={"depth": current_depth + 1}) for link in same_domain_links
+                ]
+                await context.add_requests(requests)
+
+    # Start crawl with llms.txt (depth=0)
+    try:
+        initial_requests = [Request.from_url(url, user_data={"depth": 0}) for url in initial_urls]
+        await crawler.run(initial_requests)
+    except Exception as e:
+        logger.error(f"Crawl failed for {normalized_domain}: {e}")
+        # Don't activate - leave orphan generation for cleanup
+        raise TransientError(f"Crawl failed for {normalized_domain}: {e}") from e
+
+    # Crawl succeeded - atomically swap to new generation
+    await activate_generation(normalized_domain, generation_id)
+
+    # Clean up old generations (non-blocking, can fail without affecting queries)
+    try:
+        deleted = await cleanup_old_generations(normalized_domain)
+        logger.info(f"Cleaned up {deleted} old documents for {normalized_domain}")
+    except Exception as e:
+        # Log but don't fail - cleanup is best-effort
+        logger.warning(f"Cleanup failed for {normalized_domain}: {e}")
+        result.errors.append(f"Cleanup failed: {e}")
+
+    logger.info(
+        f"Ingest complete for {normalized_domain}: "
+        f"added={result.documents_added}, "
+        f"generation={generation_id}, "
+        f"errors={len(result.errors)}"
+    )
+    return Success(result)

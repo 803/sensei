@@ -3,4 +3,4 @@
 from .server import kura
 
 if __name__ == "__main__":
-	kura.run()
+    kura.run()

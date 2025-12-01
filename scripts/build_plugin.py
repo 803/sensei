@@ -33,21 +33,21 @@ description: >-
 
 
 def main() -> None:
-	"""Generate agents/sensei.md from prompts.py."""
-	# Ensure agents directory exists
-	AGENTS_DIR.mkdir(exist_ok=True)
+    """Generate agents/sensei.md from prompts.py."""
+    # Ensure agents directory exists
+    AGENTS_DIR.mkdir(exist_ok=True)
 
-	# Build the prompt for Claude Code context
-	prompt = build_prompt("claude_code")
+    # Build the prompt for Claude Code context
+    prompt = build_prompt("claude_code")
 
-	# Write the agent file
-	content = FRONTMATTER + prompt
-	SENSEI_MD.write_text(content)
+    # Write the agent file
+    content = FRONTMATTER + prompt
+    SENSEI_MD.write_text(content)
 
-	print(f"Generated {SENSEI_MD}")
-	print(f"  - {len(prompt)} characters")
-	print(f"  - {len(prompt.split())} words")
+    print(f"Generated {SENSEI_MD}")
+    print(f"  - {len(prompt)} characters")
+    print(f"  - {len(prompt.split())} words")
 
 
 if __name__ == "__main__":
-	main()
+    main()

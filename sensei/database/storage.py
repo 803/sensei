@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sensei.config import settings
 from sensei.database.models import Document, Query, Section
 from sensei.database.models import Rating as RatingModel
-from sensei.types import CacheHit, Rating, SaveResult, SearchResult, SectionData
+from sensei.types import CacheHit, Rating, SearchResult, SectionData
 
 logger = logging.getLogger(__name__)
 
@@ -21,387 +21,431 @@ _async_session_local = None
 
 
 def _get_engine():
-	"""Get or create the async engine (lazy initialization)."""
-	global _engine
-	if _engine is None:
-		_engine = create_async_engine(
-			settings.database_url,
-			echo=False,
-			future=True,
-		)
-	return _engine
+    """Get or create the async engine (lazy initialization)."""
+    global _engine
+    if _engine is None:
+        _engine = create_async_engine(
+            settings.database_url,
+            echo=False,
+            future=True,
+        )
+    return _engine
 
 
 def _get_session_factory():
-	"""Get or create the async session factory (lazy initialization)."""
-	global _async_session_local
-	if _async_session_local is None:
-		_async_session_local = async_sessionmaker(
-			_get_engine(),
-			class_=AsyncSession,
-			expire_on_commit=False,
-		)
-	return _async_session_local
+    """Get or create the async session factory (lazy initialization)."""
+    global _async_session_local
+    if _async_session_local is None:
+        _async_session_local = async_sessionmaker(
+            _get_engine(),
+            class_=AsyncSession,
+            expire_on_commit=False,
+        )
+    return _async_session_local
 
 
 def AsyncSessionLocal():
-	"""Get a session from the lazy-initialized factory."""
-	return _get_session_factory()()
+    """Get a session from the lazy-initialized factory."""
+    return _get_session_factory()()
 
 
 async def save_query(
-	query: str,
-	output: str,
-	messages: bytes | None = None,
-	language: Optional[str] = None,
-	library: Optional[str] = None,
-	version: Optional[str] = None,
-	parent_id: Optional[UUID] = None,
-	depth: int = 0,
+    query: str,
+    output: str,
+    messages: bytes | None = None,
+    language: Optional[str] = None,
+    library: Optional[str] = None,
+    version: Optional[str] = None,
+    parent_id: Optional[UUID] = None,
+    depth: int = 0,
 ) -> UUID:
-	"""Save a query and its response to the database.
+    """Save a query and its response to the database.
 
-	Args:
-	    query: The user's query string
-	    output: The final text output from the agent
-	    messages: JSON bytes of all intermediate messages (from result.new_messages_json())
-	    language: Optional programming language filter
-	    library: Optional library/framework name
-	    version: Optional version specification
-	    parent_id: Optional parent query ID for sub-queries
-	    depth: Recursion depth (0 = top-level)
+    Args:
+        query: The user's query string
+        output: The final text output from the agent
+        messages: JSON bytes of all intermediate messages (from result.new_messages_json())
+        language: Optional programming language filter
+        library: Optional library/framework name
+        version: Optional version specification
+        parent_id: Optional parent query ID for sub-queries
+        depth: Recursion depth (0 = top-level)
 
-	Returns:
-	    The generated UUID for the saved query
-	"""
-	logger.info(f"Saving query to database: parent={parent_id}, depth={depth}")
-	async with AsyncSessionLocal() as session:
-		query_record = Query(
-			query=query,
-			language=language,
-			library=library,
-			version=version,
-			output=output,
-			messages=messages.decode("utf-8") if messages else None,
-			parent_id=parent_id,
-			depth=depth,
-		)
-		session.add(query_record)
-		await session.commit()
-		await session.refresh(query_record)
-		logger.debug(f"Query saved: id={query_record.id}, depth={depth}")
-		return query_record.id
+    Returns:
+        The generated UUID for the saved query
+    """
+    logger.info(f"Saving query to database: parent={parent_id}, depth={depth}")
+    async with AsyncSessionLocal() as session:
+        query_record = Query(
+            query=query,
+            language=language,
+            library=library,
+            version=version,
+            output=output,
+            messages=messages.decode("utf-8") if messages else None,
+            parent_id=parent_id,
+            depth=depth,
+        )
+        session.add(query_record)
+        await session.commit()
+        await session.refresh(query_record)
+        logger.debug(f"Query saved: id={query_record.id}, depth={depth}")
+        return query_record.id
 
 
 async def save_rating(rating: Rating) -> None:
-	"""Save a rating for a query response."""
-	logger.info(f"Saving rating to database: query_id={rating.query_id}")
-	async with AsyncSessionLocal() as session:
-		rating_record = RatingModel(
-			query_id=rating.query_id,
-			correctness=rating.correctness,
-			relevance=rating.relevance,
-			usefulness=rating.usefulness,
-			reasoning=rating.reasoning,
-			agent_model=rating.agent_model,
-			agent_system=rating.agent_system,
-			agent_version=rating.agent_version,
-		)
-		session.add(rating_record)
-		await session.commit()
-	logger.debug(
-		f"Rating saved: query_id={rating.query_id}, scores=({rating.correctness}, {rating.relevance}, {rating.usefulness})"
-	)
+    """Save a rating for a query response."""
+    logger.info(f"Saving rating to database: query_id={rating.query_id}")
+    async with AsyncSessionLocal() as session:
+        rating_record = RatingModel(
+            query_id=rating.query_id,
+            correctness=rating.correctness,
+            relevance=rating.relevance,
+            usefulness=rating.usefulness,
+            reasoning=rating.reasoning,
+            agent_model=rating.agent_model,
+            agent_system=rating.agent_system,
+            agent_version=rating.agent_version,
+        )
+        session.add(rating_record)
+        await session.commit()
+    logger.debug(
+        f"Rating saved: query_id={rating.query_id}, scores=({rating.correctness}, {rating.relevance}, {rating.usefulness})"
+    )
 
 
 async def get_query(id: UUID) -> Optional[Query]:
-	"""Retrieve a query by its ID.
+    """Retrieve a query by its ID.
 
-	Args:
-	    id: The query ID to retrieve
+    Args:
+        id: The query ID to retrieve
 
-	Returns:
-	    Query object if found, None otherwise
-	"""
-	async with AsyncSessionLocal() as session:
-		result = await session.execute(select(Query).where(Query.id == id))
-		return result.scalar_one_or_none()
+    Returns:
+        Query object if found, None otherwise
+    """
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(select(Query).where(Query.id == id))
+        return result.scalar_one_or_none()
 
 
 async def search_queries(
-	terms: list[str],
-	limit: int = 10,
+    terms: list[str],
+    limit: int = 10,
 ) -> list[CacheHit]:
-	"""Search cached queries using ILIKE, AND-ing all terms.
+    """Search cached queries using ILIKE, AND-ing all terms.
 
-	Each term is matched as a case-insensitive substring. All terms must match
-	for a query to be included in results.
+    Each term is matched as a case-insensitive substring. All terms must match
+    for a query to be included in results.
 
-	Args:
-	    terms: List of search terms (all must match via ILIKE)
-	    limit: Maximum results to return
+    Args:
+        terms: List of search terms (all must match via ILIKE)
+        limit: Maximum results to return
 
-	Returns:
-	    List of CacheHit objects
-	"""
-	logger.debug(f"Search: terms={terms}")
+    Returns:
+        List of CacheHit objects
+    """
+    logger.debug(f"Search: terms={terms}")
 
-	if not terms:
-		return []
+    if not terms:
+        return []
 
-	async with AsyncSessionLocal() as session:
-		# Build WHERE clause: query ILIKE '%term1%' AND query ILIKE '%term2%' ...
-		conditions = " AND ".join([f"query ILIKE :term{i}" for i in range(len(terms))])
-		params: dict = {f"term{i}": f"%{term}%" for i, term in enumerate(terms)}
-		params["limit"] = limit
+    async with AsyncSessionLocal() as session:
+        # Build WHERE clause: query ILIKE '%term1%' AND query ILIKE '%term2%' ...
+        conditions = " AND ".join([f"query ILIKE :term{i}" for i in range(len(terms))])
+        params: dict = {f"term{i}": f"%{term}%" for i, term in enumerate(terms)}
+        params["limit"] = limit
 
-		sql = f"""
+        sql = f"""
             SELECT id, query, library, version, inserted_at
             FROM queries
             WHERE {conditions}
             LIMIT :limit
         """
 
-		result = await session.execute(text(sql), params)
-		rows = result.fetchall()
+        result = await session.execute(text(sql), params)
+        rows = result.fetchall()
 
-		now = datetime.now(UTC)
-		hits = []
-		for row in rows:
-			query_id, query_text, lib, ver, inserted_at = row
-			# inserted_at is timezone-aware from DB, no coercion needed
-			age_days = (now - inserted_at).days if inserted_at else 0
-			hits.append(
-				CacheHit(
-					query_id=query_id,
-					query_truncated=query_text[:100] if query_text else "",
-					age_days=age_days,
-					library=lib,
-					version=ver,
-				)
-			)
-		return hits
+        now = datetime.now(UTC)
+        hits = []
+        for row in rows:
+            query_id, query_text, lib, ver, inserted_at = row
+            # inserted_at is timezone-aware from DB, no coercion needed
+            age_days = (now - inserted_at).days if inserted_at else 0
+            hits.append(
+                CacheHit(
+                    query_id=query_id,
+                    query_truncated=query_text[:100] if query_text else "",
+                    age_days=age_days,
+                    library=lib,
+                    version=ver,
+                )
+            )
+        return hits
 
 
-async def save_document_metadata(
-	domain: str,
-	url: str,
-	path: str,
-	content_hash: str,
-	depth: int = 0,
-) -> tuple[SaveResult, UUID | None]:
-	"""Save or update document metadata using upsert logic.
+async def insert_document(
+    domain: str,
+    url: str,
+    path: str,
+    content_hash: str,
+    generation_id: UUID,
+) -> UUID:
+    """Insert a new document for a generation (no upsert logic).
 
-	If a document with the same URL exists:
-	  - If content_hash matches, skip (SKIPPED) - returns existing doc ID
-	  - If content_hash differs, update (UPDATED) - returns doc ID
-	Otherwise, insert new document (INSERTED) - returns new doc ID
+    With generation-based crawls, we always insert new documents for each crawl.
+    Old documents are cleaned up after the generation swap.
 
-	Note: Content is now stored in sections, not documents.
-	Call save_sections() after this to save the content.
+    Note: Content is stored in sections, not documents.
+    Call insert_sections() after this to save the content.
 
-	Args:
-	    domain: Source domain (e.g., 'react.dev')
-	    url: Full URL of the document
-	    path: Path portion of the URL
-	    content_hash: Hash for change detection
-	    depth: Crawl depth (0 = llms.txt, 1+ = linked)
+    Args:
+        domain: Source domain (e.g., 'react.dev')
+        url: Full URL of the document
+        path: Path portion of the URL
+        content_hash: Hash for change detection (future optimization)
+        generation_id: The generation this document belongs to
 
-	Returns:
-	    Tuple of (SaveResult, document_id or None if skipped)
-	"""
-	async with AsyncSessionLocal() as session:
-		result = await session.execute(select(Document).where(Document.url == url))
-		existing = result.scalar_one_or_none()
+    Returns:
+        The generated document ID
+    """
+    async with AsyncSessionLocal() as session:
+        db_doc = Document(
+            domain=domain,
+            url=url,
+            path=path,
+            content_hash=content_hash,
+            generation_id=generation_id,
+            generation_active=False,  # Not visible until generation swap
+        )
+        session.add(db_doc)
+        await session.commit()
+        await session.refresh(db_doc)
+        logger.info(f"Document inserted: {url} (generation={generation_id})")
+        return db_doc.id
 
-		if existing:
-			if existing.content_hash == content_hash:
-				logger.debug(f"Document unchanged, skipping: {url}")
-				return SaveResult.SKIPPED, existing.id
-			# Content changed - update metadata
-			existing.content_hash = content_hash
-			existing.depth = depth
-			existing.content_refreshed_at = datetime.now(UTC)
-			await session.commit()
-			logger.info(f"Document updated: {url}")
-			return SaveResult.UPDATED, existing.id
 
-		db_doc = Document(
-			domain=domain,
-			url=url,
-			path=path,
-			content_hash=content_hash,
-			depth=depth,
-		)
-		session.add(db_doc)
-		await session.commit()
-		await session.refresh(db_doc)
-		logger.info(f"Document saved: {url}")
-		return SaveResult.INSERTED, db_doc.id
+async def activate_generation(domain: str, generation_id: UUID) -> int:
+    """Atomically swap to a new generation for a domain.
+
+    Sets generation_active = (generation_id == new_generation_id) for all
+    documents in the domain. This makes the new generation visible and
+    hides all previous generations in one atomic operation.
+
+    Args:
+        domain: The domain to swap generations for
+        generation_id: The new generation to activate
+
+    Returns:
+        Number of documents activated
+    """
+    async with AsyncSessionLocal() as session:
+        # Atomic swap: active = (generation_id == new_gen_id)
+        result = await session.execute(
+            text("""
+				UPDATE documents
+				SET generation_active = (generation_id = :gen_id)
+				WHERE domain = :domain
+				RETURNING id
+			"""),
+            {"domain": domain, "gen_id": str(generation_id)},
+        )
+        count = len(result.fetchall())
+        await session.commit()
+        logger.info(f"Activated generation {generation_id} for {domain}: {count} documents")
+        return count
+
+
+async def cleanup_old_generations(domain: str) -> int:
+    """Delete inactive documents for a domain.
+
+    Should be called after activate_generation to clean up old generations.
+    Sections are deleted via CASCADE.
+
+    Args:
+        domain: The domain to clean up
+
+    Returns:
+        Number of documents deleted
+    """
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            delete(Document).where(
+                Document.domain == domain,
+                Document.generation_active == False,  # noqa: E712 - SQLAlchemy comparison
+            )
+        )
+        await session.commit()
+        count = result.rowcount
+        logger.info(f"Cleaned up {count} old documents for {domain}")
+        return count
 
 
 async def save_sections(
-	document_id: UUID,
-	sections: SectionData,
+    document_id: UUID,
+    sections: SectionData,
 ) -> int:
-	"""Save sections for a document, replacing any existing sections.
+    """Save sections for a document, replacing any existing sections.
 
-	Flattens the SectionData tree into rows with parent_section_id
-	relationships and position ordering.
+    Flattens the SectionData tree into rows with parent_section_id
+    relationships and position ordering.
 
-	Args:
-	    document_id: The document these sections belong to
-	    sections: Root SectionData containing the tree structure
+    Args:
+        document_id: The document these sections belong to
+        sections: Root SectionData containing the tree structure
 
-	Returns:
-	    Number of sections saved
-	"""
-	async with AsyncSessionLocal() as session:
-		# Delete existing sections for this document (cascade will handle children)
-		await session.execute(delete(Section).where(Section.document_id == document_id))
+    Returns:
+        Number of sections saved
+    """
+    async with AsyncSessionLocal() as session:
+        # Delete existing sections for this document (cascade will handle children)
+        await session.execute(delete(Section).where(Section.document_id == document_id))
 
-		# Flatten the tree and insert sections
-		position_counter = [0]  # Use list to allow mutation in nested function
+        # Flatten the tree and insert sections
+        position_counter = [0]  # Use list to allow mutation in nested function
 
-		def flatten(
-			node: SectionData,
-			parent_id: UUID | None = None,
-		) -> list[Section]:
-			"""Recursively flatten SectionData tree into Section models."""
-			result: list[Section] = []
+        def flatten(
+            node: SectionData,
+            parent_id: UUID | None = None,
+        ) -> list[Section]:
+            """Recursively flatten SectionData tree into Section models."""
+            result: list[Section] = []
 
-			# Create section for this node
-			section = Section(
-				document_id=document_id,
-				parent_section_id=parent_id,
-				heading=node.heading,
-				level=node.level,
-				content=node.content,
-				position=position_counter[0],
-			)
-			position_counter[0] += 1
-			result.append(section)
+            # Create section for this node
+            section = Section(
+                document_id=document_id,
+                parent_section_id=parent_id,
+                heading=node.heading,
+                level=node.level,
+                content=node.content,
+                position=position_counter[0],
+            )
+            position_counter[0] += 1
+            result.append(section)
 
-			# Recursively process children
-			for child in node.children:
-				# We need to flush to get the section ID for parent relationship
-				session.add(section)
+            # Recursively process children
+            for child in node.children:
+                # We need to flush to get the section ID for parent relationship
+                session.add(section)
 
-			return result
+            return result
 
-		# Alternative: flatten iteratively to get IDs properly
-		async def save_tree(
-			node: SectionData,
-			parent_id: UUID | None = None,
-		) -> int:
-			"""Recursively save SectionData tree, returning count."""
-			count = 0
+        # Alternative: flatten iteratively to get IDs properly
+        async def save_tree(
+            node: SectionData,
+            parent_id: UUID | None = None,
+        ) -> int:
+            """Recursively save SectionData tree, returning count."""
+            count = 0
 
-			# Only save if there's content or children
-			if node.content or node.children:
-				section = Section(
-					document_id=document_id,
-					parent_section_id=parent_id,
-					heading=node.heading,
-					level=node.level,
-					content=node.content,
-					position=position_counter[0],
-				)
-				position_counter[0] += 1
-				session.add(section)
-				await session.flush()  # Get the ID
-				count += 1
+            # Only save if there's content or children
+            if node.content or node.children:
+                section = Section(
+                    document_id=document_id,
+                    parent_section_id=parent_id,
+                    heading=node.heading,
+                    level=node.level,
+                    content=node.content,
+                    position=position_counter[0],
+                )
+                position_counter[0] += 1
+                session.add(section)
+                await session.flush()  # Get the ID
+                count += 1
 
-				# Save children with this section as parent
-				for child in node.children:
-					count += await save_tree(child, section.id)
+                # Save children with this section as parent
+                for child in node.children:
+                    count += await save_tree(child, section.id)
 
-			return count
+            return count
 
-		count = await save_tree(sections, None)
-		await session.commit()
-		logger.info(f"Saved {count} sections for document {document_id}")
-		return count
+        count = await save_tree(sections, None)
+        await session.commit()
+        logger.info(f"Saved {count} sections for document {document_id}")
+        return count
 
 
 async def delete_sections_by_document(document_id: UUID) -> int:
-	"""Delete all sections for a document.
+    """Delete all sections for a document.
 
-	Args:
-	    document_id: The document to delete sections for
+    Args:
+        document_id: The document to delete sections for
 
-	Returns:
-	    Number of sections deleted
-	"""
-	async with AsyncSessionLocal() as session:
-		result = await session.execute(delete(Section).where(Section.document_id == document_id))
-		await session.commit()
-		return result.rowcount
+    Returns:
+        Number of sections deleted
+    """
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(delete(Section).where(Section.document_id == document_id))
+        await session.commit()
+        return result.rowcount
 
 
 async def get_sections_by_document(
-	domain: str,
-	path: str,
+    domain: str,
+    path: str,
 ) -> list[Section]:
-	"""Get all sections for a document, ordered by position.
+    """Get all sections for an active document, ordered by position.
 
-	Used for reconstructing the full document content.
+    Used for reconstructing the full document content.
+    Only returns sections from active (visible) documents.
 
-	Args:
-	    domain: Document domain
-	    path: Document path
+    Args:
+        domain: Document domain
+        path: Document path
 
-	Returns:
-	    List of Section objects ordered by position
-	"""
-	async with AsyncSessionLocal() as session:
-		# First find the document
-		doc_result = await session.execute(
-			select(Document).where(
-				Document.domain == domain,
-				Document.path == path,
-			)
-		)
-		doc = doc_result.scalar_one_or_none()
-		if not doc:
-			return []
+    Returns:
+        List of Section objects ordered by position
+    """
+    async with AsyncSessionLocal() as session:
+        # Find the active document
+        doc_result = await session.execute(
+            select(Document).where(
+                Document.domain == domain,
+                Document.path == path,
+                Document.generation_active == True,  # noqa: E712 - SQLAlchemy comparison
+            )
+        )
+        doc = doc_result.scalar_one_or_none()
+        if not doc:
+            return []
 
-		# Get all sections ordered by position
-		result = await session.execute(select(Section).where(Section.document_id == doc.id).order_by(Section.position))
-		return list(result.scalars().all())
+        # Get all sections ordered by position
+        result = await session.execute(select(Section).where(Section.document_id == doc.id).order_by(Section.position))
+        return list(result.scalars().all())
 
 
 async def get_section_subtree_by_heading(
-	domain: str,
-	path: str,
-	heading: str,
+    domain: str,
+    path: str,
+    heading: str,
 ) -> list[Section]:
-	"""Get a section and all its descendants by heading.
+    """Get a section and all its descendants by heading.
 
-	Uses recursive CTE to traverse the parent_section_id tree.
+    Uses recursive CTE to traverse the parent_section_id tree.
+    Only returns sections from active (visible) documents.
 
-	Args:
-	    domain: Document domain
-	    path: Document path
-	    heading: Heading text to find
+    Args:
+        domain: Document domain
+        path: Document path
+        heading: Heading text to find
 
-	Returns:
-	    List of Section objects (the matching section + all descendants)
-	"""
-	async with AsyncSessionLocal() as session:
-		# First find the document
-		doc_result = await session.execute(
-			select(Document).where(
-				Document.domain == domain,
-				Document.path == path,
-			)
-		)
-		doc = doc_result.scalar_one_or_none()
-		if not doc:
-			return []
+    Returns:
+        List of Section objects (the matching section + all descendants)
+    """
+    async with AsyncSessionLocal() as session:
+        # Find the active document
+        doc_result = await session.execute(
+            select(Document).where(
+                Document.domain == domain,
+                Document.path == path,
+                Document.generation_active == True,  # noqa: E712 - SQLAlchemy comparison
+            )
+        )
+        doc = doc_result.scalar_one_or_none()
+        if not doc:
+            return []
 
-		# Use recursive CTE to get subtree
-		sql = """
+        # Use recursive CTE to get subtree
+        sql = """
             WITH RECURSIVE subtree AS (
                 SELECT * FROM sections
                 WHERE document_id = :doc_id AND heading = :heading
@@ -411,90 +455,95 @@ async def get_section_subtree_by_heading(
             )
             SELECT * FROM subtree ORDER BY position
         """
-		result = await session.execute(
-			text(sql),
-			{"doc_id": str(doc.id), "heading": heading},
-		)
-		rows = result.fetchall()
+        result = await session.execute(
+            text(sql),
+            {"doc_id": str(doc.id), "heading": heading},
+        )
+        rows = result.fetchall()
 
-		# Convert to Section objects
-		return [
-			Section(
-				id=row.id,
-				document_id=row.document_id,
-				parent_section_id=row.parent_section_id,
-				heading=row.heading,
-				level=row.level,
-				content=row.content,
-				position=row.position,
-			)
-			for row in rows
-		]
+        # Convert to Section objects
+        return [
+            Section(
+                id=row.id,
+                document_id=row.document_id,
+                parent_section_id=row.parent_section_id,
+                heading=row.heading,
+                level=row.level,
+                content=row.content,
+                position=row.position,
+            )
+            for row in rows
+        ]
 
 
-async def get_document_by_url(url: str) -> Optional[Document]:
-	"""Retrieve a document by its URL.
+async def get_document_by_url(url: str, active_only: bool = True) -> Optional[Document]:
+    """Retrieve a document by its URL.
 
-	Args:
-	    url: The full URL of the document
+    Args:
+        url: The full URL of the document
+        active_only: If True (default), only return active documents
 
-	Returns:
-	    Document if found, None otherwise
-	"""
-	async with AsyncSessionLocal() as session:
-		result = await session.execute(select(Document).where(Document.url == url))
-		return result.scalar_one_or_none()
+    Returns:
+        Document if found, None otherwise
+    """
+    async with AsyncSessionLocal() as session:
+        query = select(Document).where(Document.url == url)
+        if active_only:
+            query = query.where(Document.generation_active == True)  # noqa: E712
+        result = await session.execute(query)
+        return result.scalar_one_or_none()
 
 
 async def delete_documents_by_domain(domain: str) -> int:
-	"""Delete all documents for a domain.
+    """Delete all documents for a domain.
 
-	Useful for re-crawling a domain from scratch.
+    Useful for re-crawling a domain from scratch.
 
-	Args:
-	    domain: The domain to delete documents for
+    Args:
+        domain: The domain to delete documents for
 
-	Returns:
-	    Number of documents deleted
-	"""
-	async with AsyncSessionLocal() as session:
-		result = await session.execute(delete(Document).where(Document.domain == domain))
-		await session.commit()
-		count = result.rowcount
-		logger.info(f"Deleted {count} documents for domain: {domain}")
-		return count
+    Returns:
+        Number of documents deleted
+    """
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(delete(Document).where(Document.domain == domain))
+        await session.commit()
+        count = result.rowcount
+        logger.info(f"Deleted {count} documents for domain: {domain}")
+        return count
 
 
 async def search_sections_fts(
-	domain: str,
-	query: str,
-	paths: list[str] | None = None,
-	limit: int = 10,
+    domain: str,
+    query: str,
+    paths: list[str] | None = None,
+    limit: int = 10,
 ) -> list[SearchResult]:
-	"""Search sections using PostgreSQL full-text search.
+    """Search sections using PostgreSQL full-text search.
 
-	Uses websearch_to_tsquery() for natural language query parsing,
-	ts_headline() for snippets, and recursive CTE for heading breadcrumbs.
+    Uses websearch_to_tsquery() for natural language query parsing,
+    ts_headline() for snippets, and recursive CTE for heading breadcrumbs.
 
-	Args:
-	    domain: Domain to search within (required)
-	    query: Natural language search query
-	    paths: Optional path prefixes to filter (e.g., ["/hooks"] matches "/hooks/useState")
-	    limit: Maximum results to return
+    Args:
+        domain: Domain to search within (required)
+        query: Natural language search query
+        paths: Optional path prefixes to filter (e.g., ["/hooks"] matches "/hooks/useState")
+        limit: Maximum results to return
 
-	Returns:
-	    List of SearchResult objects ordered by relevance, with heading_path
-	"""
-	logger.debug(f"FTS search: domain={domain}, query={query}, paths={paths}")
+    Returns:
+        List of SearchResult objects ordered by relevance, with heading_path
+    """
+    logger.debug(f"FTS search: domain={domain}, query={query}, paths={paths}")
 
-	if not query.strip():
-		return []
+    if not query.strip():
+        return []
 
-	async with AsyncSessionLocal() as session:
-		# Build the SQL with heading_path via recursive CTE
-		sql = """
+    async with AsyncSessionLocal() as session:
+        # Build the SQL with heading_path via recursive CTE
+        # Only search active documents (generation_active = true)
+        sql = """
             WITH RECURSIVE ancestors AS (
-                -- Start with matching sections
+                -- Start with matching sections from active documents
                 SELECT
                     s.id,
                     s.parent_section_id,
@@ -507,20 +556,21 @@ async def search_sections_fts(
                 FROM sections s
                 JOIN documents d ON s.document_id = d.id
                 WHERE d.domain = :domain
+                  AND d.generation_active = true
                   AND s.search_vector @@ websearch_to_tsquery('english', :query)
         """
 
-		params: dict = {"domain": domain, "query": query, "limit": limit}
+        params: dict = {"domain": domain, "query": query, "limit": limit}
 
-		# Add path prefix filtering if specified
-		if paths:
-			path_conditions = " OR ".join([f"d.path LIKE :path{i}" for i in range(len(paths))])
-			sql += f" AND ({path_conditions})"
-			for i, path in enumerate(paths):
-				prefix = path if path.startswith("/") else f"/{path}"
-				params[f"path{i}"] = f"{prefix}%"
+        # Add path prefix filtering if specified
+        if paths:
+            path_conditions = " OR ".join([f"d.path LIKE :path{i}" for i in range(len(paths))])
+            sql += f" AND ({path_conditions})"
+            for i, path in enumerate(paths):
+                prefix = path if path.startswith("/") else f"/{path}"
+                params[f"path{i}"] = f"{prefix}%"
 
-		sql += """
+        sql += """
                 UNION ALL
                 -- Recursively get ancestors
                 SELECT
@@ -563,57 +613,59 @@ async def search_sections_fts(
             LIMIT :limit
         """
 
-		result = await session.execute(text(sql), params)
-		rows = result.fetchall()
+        result = await session.execute(text(sql), params)
+        rows = result.fetchall()
 
-		return [
-			SearchResult(
-				url=row.url,
-				path=row.path,
-				snippet=row.snippet,
-				rank=row.rank,
-				heading_path=row.heading_path or "",
-			)
-			for row in rows
-		]
+        return [
+            SearchResult(
+                url=row.url,
+                path=row.path,
+                snippet=row.snippet,
+                rank=row.rank,
+                heading_path=row.heading_path or "",
+            )
+            for row in rows
+        ]
 
 
 async def get_sections_for_toc(
-	domain: str,
-	path: str,
+    domain: str,
+    path: str,
 ) -> list[tuple[UUID, UUID | None, str | None, int]]:
-	"""Get section hierarchy data for building TOC.
+    """Get section hierarchy data for building TOC.
 
-	Returns minimal data needed to build a TOCEntry tree.
+    Returns minimal data needed to build a TOCEntry tree.
+    Only returns sections from active (visible) documents.
 
-	Args:
-	    domain: Document domain
-	    path: Document path
+    Args:
+        domain: Document domain
+        path: Document path
 
-	Returns:
-	    List of tuples: (id, parent_section_id, heading, level)
-	"""
-	async with AsyncSessionLocal() as session:
-		# Find the document
-		doc_result = await session.execute(
-			select(Document).where(
-				Document.domain == domain,
-				Document.path == path,
-			)
-		)
-		doc = doc_result.scalar_one_or_none()
-		if not doc:
-			return []
+    Returns:
+        List of tuples: (id, parent_section_id, heading, level)
+    """
+    async with AsyncSessionLocal() as session:
+        # Find the active document
+        doc_result = await session.execute(
+            select(Document).where(
+                Document.domain == domain,
+                Document.path == path,
+                Document.generation_active == True,  # noqa: E712 - SQLAlchemy comparison
+            )
+        )
+        doc = doc_result.scalar_one_or_none()
+        if not doc:
+            return []
 
-		# Get section hierarchy data
-		result = await session.execute(
-			select(
-				Section.id,
-				Section.parent_section_id,
-				Section.heading,
-				Section.level,
-			)
-			.where(Section.document_id == doc.id)
-			.order_by(Section.position)
-		)
-		return [(row.id, row.parent_section_id, row.heading, row.level) for row in result]
+        # Get section hierarchy data
+        result = await session.execute(
+            select(
+                Section.id,
+                Section.parent_section_id,
+                Section.heading,
+                Section.level,
+            )
+            .where(Section.document_id == doc.id)
+            .order_by(Section.position)
+        )
+        return [(row.id, row.parent_section_id, row.heading, row.level) for row in result]

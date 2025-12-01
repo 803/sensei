@@ -3,4 +3,4 @@
 from .server import scout
 
 if __name__ == "__main__":
-	scout.run()
+    scout.run()

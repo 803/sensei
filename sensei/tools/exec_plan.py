@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 EXEC_PLAN_TEMPLATE = dedent(
-	"""\
+    """\
     # Documentation Research ExecPlan
 
     ## Purpose / Big Picture
@@ -60,33 +60,33 @@ EXEC_PLAN_TEMPLATE = dedent(
 
 
 async def add_exec_plan(ctx: RunContext[Deps]) -> Success[str]:
-	"""Add an ExecPlan template to guide your research work."""
-	if not ctx.deps:
-		logger.warning("Cannot create ExecPlan: missing deps")
-		raise ToolError("Missing deps; cannot create ExecPlan.")
+    """Add an ExecPlan template to guide your research work."""
+    if not ctx.deps:
+        logger.warning("Cannot create ExecPlan: missing deps")
+        raise ToolError("Missing deps; cannot create ExecPlan.")
 
-	logger.info("Creating ExecPlan")
-	plan = EXEC_PLAN_TEMPLATE.format(timestamp=datetime.now().isoformat())
-	ctx.deps.exec_plan = plan
-	logger.debug("ExecPlan created")
+    logger.info("Creating ExecPlan")
+    plan = EXEC_PLAN_TEMPLATE.format(timestamp=datetime.now().isoformat())
+    ctx.deps.exec_plan = plan
+    logger.debug("ExecPlan created")
 
-	return Success(
-		"ExecPlan template added to your instructions. Use update_exec_plan() to fill it in and track your progress."
-	)
+    return Success(
+        "ExecPlan template added to your instructions. Use update_exec_plan() to fill it in and track your progress."
+    )
 
 
 async def update_exec_plan(ctx: RunContext[Deps], updated_plan: str) -> Success[str] | NoResults:
-	"""Update your ExecPlan with progress, decisions, and discoveries."""
-	if not ctx.deps:
-		logger.warning("Cannot update ExecPlan: missing deps")
-		raise ToolError("Missing deps; cannot update ExecPlan.")
+    """Update your ExecPlan with progress, decisions, and discoveries."""
+    if not ctx.deps:
+        logger.warning("Cannot update ExecPlan: missing deps")
+        raise ToolError("Missing deps; cannot update ExecPlan.")
 
-	if not ctx.deps.exec_plan:
-		logger.warning("Cannot update ExecPlan: no plan exists")
-		return NoResults()
+    if not ctx.deps.exec_plan:
+        logger.warning("Cannot update ExecPlan: no plan exists")
+        return NoResults()
 
-	logger.info("Updating ExecPlan")
-	ctx.deps.exec_plan = updated_plan
-	logger.debug(f"ExecPlan updated, length={len(updated_plan)}")
+    logger.info("Updating ExecPlan")
+    ctx.deps.exec_plan = updated_plan
+    logger.debug(f"ExecPlan updated, length={len(updated_plan)}")
 
-	return Success("ExecPlan updated. Continue your research.")
+    return Success("ExecPlan updated. Continue your research.")

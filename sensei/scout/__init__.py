@@ -30,12 +30,12 @@ Usage as library:
 from .manager import RepoManager, get_manager, with_repo
 from .models import RepoMeta, RepoRef
 from .operations import (
-	TreeResult,
-	build_tree,
-	glob_files,
-	grep_files,
-	list_files,
-	read_files,
+    TreeResult,
+    build_tree,
+    glob_files,
+    grep_files,
+    list_files,
+    read_files,
 )
 
 # DISABLED: aider-chat conflicts with pydantic-ai (openai version mismatch)
@@ -44,23 +44,23 @@ from .operations import (
 from .server import scout
 
 __all__ = [
-	# Server
-	"scout",
-	# Manager
-	"RepoManager",
-	"get_manager",
-	"with_repo",
-	# Models
-	"RepoRef",
-	"RepoMeta",
-	# Operations
-	"glob_files",
-	"read_files",
-	"grep_files",
-	"build_tree",
-	"list_files",
-	"TreeResult",
-	# DISABLED: aider-chat conflicts with pydantic-ai (openai version mismatch)
-	# "RepoMapWrapper",
-	# "generate_repo_map",
+    # Server
+    "scout",
+    # Manager
+    "RepoManager",
+    "get_manager",
+    "with_repo",
+    # Models
+    "RepoRef",
+    "RepoMeta",
+    # Operations
+    "glob_files",
+    "read_files",
+    "grep_files",
+    "build_tree",
+    "list_files",
+    "TreeResult",
+    # DISABLED: aider-chat conflicts with pydantic-ai (openai version mismatch)
+    # "RepoMapWrapper",
+    # "generate_repo_map",
 ]

@@ -56,7 +56,7 @@ line-length = 120
 
 [tool.ruff.format]
 quote-style = "double"
-indent-style = "tab"
+indent-style = "space"
 docstring-code-format = true
 
 [tool.uv]
@@ -75,3 +75,5 @@ dev = [
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+log_cli = true
+log_cli_level = "WARN"

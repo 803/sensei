@@ -300,36 +300,36 @@ Context = Literal["full_mcp", "sub_agent_mcp", "claude_code"]
 
 
 def build_prompt(context: Context) -> str:
-	"""Build a complete system prompt for the given context.
+    """Build a complete system prompt for the given context.
 
-	Args:
-	    context: One of "full_mcp", "sub_agent_mcp", or "claude_code"
+    Args:
+        context: One of "full_mcp", "sub_agent_mcp", or "claude_code"
 
-	Returns:
-	    Complete system prompt string
-	"""
-	if context not in ("full_mcp", "sub_agent_mcp", "claude_code"):
-		raise ValueError(f"Unknown context: {context}")
+    Returns:
+        Complete system prompt string
+    """
+    if context not in ("full_mcp", "sub_agent_mcp", "claude_code"):
+        raise ValueError(f"Unknown context: {context}")
 
-	parts = [
-		# Core identity
-		IDENTITY,
-		CONFIDENCE_LEVELS,
-		# Query decomposition for coordinators only (not subagents - they're workers)
-		QUERY_DECOMPOSITION if context in ("full_mcp", "claude_code") else None,
-		# Core methodology
-		RESEARCH_METHODOLOGY,
-		ENGINEERING_JUDGMENT,
-		HANDLING_AMBIGUITY,
-		REPORTING_RESULTS,
-		# Tools and sources
-		AVAILABLE_TOOLS,
-		CHOOSING_SOURCES,
-		# Context-specific
-		CLAUDE_CODE_NATIVE if context in ("claude_code",) else None,
-		CONTEXT_FULL_MCP if context in ("full_mcp",) else None,
-		CONTEXT_SUB_AGENT_MCP if context in ("sub_agent_mcp",) else None,
-		CONTEXT_CLAUDE_CODE if context in ("claude_code",) else None,
-	]
+    parts = [
+        # Core identity
+        IDENTITY,
+        CONFIDENCE_LEVELS,
+        # Query decomposition for coordinators only (not subagents - they're workers)
+        QUERY_DECOMPOSITION if context in ("full_mcp", "claude_code") else None,
+        # Core methodology
+        RESEARCH_METHODOLOGY,
+        ENGINEERING_JUDGMENT,
+        HANDLING_AMBIGUITY,
+        REPORTING_RESULTS,
+        # Tools and sources
+        AVAILABLE_TOOLS,
+        CHOOSING_SOURCES,
+        # Context-specific
+        CLAUDE_CODE_NATIVE if context in ("claude_code",) else None,
+        CONTEXT_FULL_MCP if context in ("full_mcp",) else None,
+        CONTEXT_SUB_AGENT_MCP if context in ("sub_agent_mcp",) else None,
+        CONTEXT_CLAUDE_CODE if context in ("claude_code",) else None,
+    ]
 
-	return "\n".join(p for p in parts if p)
+    return "\n".join(p for p in parts if p)
