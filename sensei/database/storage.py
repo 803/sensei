@@ -355,6 +355,29 @@ async def get_document_by_url(url: str, active_only: bool = True) -> Optional[Do
         return result.scalar_one_or_none()
 
 
+async def has_active_documents(domain: str) -> bool:
+    """Check if a domain has any active (visible) documents.
+
+    Used by auto-ingest to determine if a domain needs to be crawled.
+
+    Args:
+        domain: The domain to check (e.g., 'react.dev')
+
+    Returns:
+        True if domain has at least one active document, False otherwise
+    """
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(Document.id)
+            .where(
+                Document.domain == domain,
+                Document.generation_active == True,  # noqa: E712 - SQLAlchemy comparison
+            )
+            .limit(1)
+        )
+        return result.scalar_one_or_none() is not None
+
+
 async def delete_documents_by_domain(domain: str) -> int:
     """Delete all documents for a domain.
 

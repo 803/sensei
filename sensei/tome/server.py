@@ -15,10 +15,11 @@ from typing import Annotated
 from fastmcp import FastMCP
 from pydantic import Field
 
+from sensei.database import storage
 from sensei.tome.crawler import ingest_domain
 from sensei.tome.service import tome_get as _tome_get
 from sensei.tome.service import tome_search as _tome_search
-from sensei.types import IngestResult, NoResults, SearchResult, Success
+from sensei.types import NoResults, SearchResult, Success
 
 logger = logging.getLogger(__name__)
 
@@ -45,27 +46,66 @@ tome = FastMCP(name="tome", lifespan=lifespan)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Auto-ingest Helper
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+async def _ensure_domain_ingested(domain: str) -> str | None:
+    """Ensure domain has been ingested, auto-ingesting if needed.
+
+    This is edge-layer orchestration: check if we have docs for the domain,
+    ingest if not, and return an error message or None if ready.
+
+    Args:
+        domain: The domain to check/ingest (e.g., 'react.dev')
+
+    Returns:
+        None if domain is ready (has docs), or error message string if not
+    """
+    if await storage.has_active_documents(domain):
+        return None  # Domain already ingested
+
+    logger.info(f"Auto-ingesting unknown domain: {domain}")
+    match await ingest_domain(domain):
+        case Success(result) if result.failures:
+            # Ingest had failures - return detailed error
+            failure_msg = _format_exception(result.failures[0])
+            return f"Could not ingest {domain}: {failure_msg}"
+        case Success(result) if result.documents_added == 0:
+            # Ingest succeeded but no docs - log warning, return message
+            logger.warning(f"Auto-ingest succeeded but 0 documents: {domain}")
+            return f"No documents found for {domain}"
+        case Success(_):
+            # Ingest succeeded with docs
+            return None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Tools
 # ─────────────────────────────────────────────────────────────────────────────
 
 
 @tome.tool
 async def get(
-    domain: Annotated[str, Field(description="Domain to fetch from (e.g., 'llmstext.org')")],
+    domain: Annotated[str, Field(description="Domain to fetch from (e.g., 'react.dev')")],
     path: Annotated[
         str,
         Field(description="Document path, or 'INDEX' for /llms.txt"),
     ],
 ) -> str:
-    """Get documentation from an ingested llms.txt domain.
+    """Get documentation from an llms.txt domain.
 
     Use this to retrieve specific documents from domains you've previously ingested.
     Start with path="INDEX" to see the table of contents, then fetch specific docs.
 
     Examples:
-        - domain="llmstext.org", path="INDEX" - get the llms.txt table of contents
-        - domain="llmstext.org", path="/hooks/useState" - get a specific document
+        - domain="react.dev", path="INDEX" - get the llms.txt table of contents
+        - domain="react.dev", path="/hooks/useState" - get a specific document
     """
+    # Auto-ingest if domain is unknown
+    if error := await _ensure_domain_ingested(domain):
+        return error
+
     match await _tome_get(domain, path):
         case Success(content):
             return content
@@ -75,7 +115,7 @@ async def get(
 
 @tome.tool
 async def search(
-    domain: Annotated[str, Field(description="Domain to search (e.g., 'llmstext.org')")],
+    domain: Annotated[str, Field(description="Domain to search (e.g., 'react.dev')")],
     query: Annotated[str, Field(description="Natural language search query")],
     paths: Annotated[
         list[str],
@@ -83,15 +123,19 @@ async def search(
     ] = [],
     limit: Annotated[int, Field(description="Maximum results", ge=1, le=50)] = 10,
 ) -> str:
-    """Search documentation within an ingested llms.txt domain.
+    """Search documentation within an llms.txt domain.
 
     Uses full-text search to find relevant documentation. Results include
     snippets with highlighted search terms and relevance ranking.
 
     Examples:
-        - domain="llmstext.org", query="useState" - search all docs for useState
-        - domain="llmstext.org", query="state management", paths=["/hooks"] - search only hooks docs
+        - domain="react.dev", query="useState" - search all docs for useState
+        - domain="react.dev", query="state management", paths=["/hooks"] - search only hooks docs
     """
+    # Auto-ingest if domain is unknown
+    if error := await _ensure_domain_ingested(domain):
+        return error
+
     match await _tome_search(domain, query, paths or None, limit):
         case Success(results):
             return _format_search_results(results)
@@ -99,65 +143,14 @@ async def search(
             return f"No results for '{query}' in {domain}"
 
 
-@tome.tool
-async def ingest(
-    domain: Annotated[
-        str,
-        Field(description="Domain to ingest (e.g., 'llmstext.org')"),
-    ],
-    max_depth: Annotated[
-        int,
-        Field(description="Maximum link depth to follow (0=only llms.txt)", ge=0, le=5),
-    ] = 3,
-) -> str:
-    """Ingest a domain's llms.txt documentation into the knowledge base.
-
-    Fetches /llms.txt, parses links, and crawls all same-domain linked
-    documents up to max_depth.
-
-    Use this before searching a domain for the first time.
-
-    Examples:
-        - domain="llmstext.org" - ingest React documentation
-        - domain="fastapi.tiangolo.com", max_depth=1 - shallow crawl
-    """
-    match await ingest_domain(domain, max_depth):
-        case Success(result):
-            return _format_ingest_result(result)
+# ─────────────────────────────────────────────────────────────────────────────
+# Formatters
+# ─────────────────────────────────────────────────────────────────────────────
 
 
 def _format_exception(e: Exception) -> str:
     """Format an exception for display, showing type and message."""
     return f"{type(e).__name__}: {e}"
-
-
-def _format_ingest_result(result: IngestResult) -> str:
-    """Format ingest result based on success/failure status.
-
-    Any failures = overall failure, regardless of documents added.
-    Zero documents with only warnings = failure (nothing useful ingested).
-    """
-    # Any failures = FAILURE
-    if result.failures:
-        failure_msgs = [_format_exception(e) for e in result.failures[:3]]
-        failure_summary = "; ".join(failure_msgs)
-        if len(result.failures) > 3:
-            failure_summary += f" (+{len(result.failures) - 3} more)"
-        docs_note = f" Got {result.documents_added} documents." if result.documents_added > 0 else ""
-        return f"FAILED: {result.domain} - {failure_summary}{docs_note}"
-
-    # Zero documents (even with only warnings) = failure
-    if result.documents_added == 0:
-        if result.warnings:
-            return f"No documents found for {result.domain} ({len(result.warnings)} skipped)"
-        return f"No documents found for {result.domain}"
-
-    # Success with warnings
-    if result.warnings:
-        return f"Ingested {result.domain}: {result.documents_added} documents ({len(result.warnings)} skipped)"
-
-    # Clean success
-    return f"Ingested {result.domain}: {result.documents_added} documents"
 
 
 def _format_search_results(results: list[SearchResult]) -> str:
