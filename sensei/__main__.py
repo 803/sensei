@@ -55,3 +55,10 @@ app = FastAPI(
     ],
     lifespan=combined_lifespan,
 )
+
+
+def run():
+    """Run the combined Sensei HTTP server."""
+    import uvicorn
+
+    uvicorn.run(app, host="0.0.0.0", port=8000)

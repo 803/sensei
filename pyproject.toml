@@ -1,6 +1,6 @@
 [project]
 name = "sensei-ai"
-version = "1.1.0"
+version = "1.1.1"
 description = "Intelligent documentation agent for AI coding assistants"
 readme = "README.md"
 requires-python = ">=3.13"
@@ -39,6 +39,7 @@ Homepage = "https://github.com/alizain/sensei"
 Repository = "https://github.com/alizain/sensei"
 
 [project.scripts]
+sensei = "sensei.__main__:run"
 scout = "sensei.scout:scout.run"
 kura = "sensei.kura:kura.run"
 tome = "sensei.tome:tome.run"
