@@ -7,18 +7,12 @@
 	"keywords": ["scout", "repo-map", "code-exploration", "documentation", "research"],
 	"license": "MIT",
 	"mcpServers": {
-		"scout": {
-			"args": ["--from", "sensei-ai", "scout"],
-			"command": "uvx",
-			"type": "stdio"
-		},
-		"tome": {
-			"args": ["--from", "sensei-ai", "tome"],
-			"command": "uvx",
-			"type": "stdio"
+		"sensei": {
+			"type": "http",
+			"url": "http://127.0.0.1:8000/mcp"
 		}
 	},
 	"name": "sensei",
 	"repository": "https://github.com/alizain/sensei",
-	"version": "1.2.0"
+	"version": "1.3.0"
 }
