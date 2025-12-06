@@ -1,28 +1,20 @@
-"""Scout MCP client for GitHub repository exploration."""
+"""Scout toolset for GitHub repository exploration."""
 
-from pydantic_ai.mcp import MCPServerStreamableHTTP
+from pydantic_ai.toolsets.fastmcp import FastMCPToolset
 
-from sensei.config import settings
+from sensei.scout.server import mcp as scout_mcp
 
 
-def create_scout_server(base_url: str = "http://localhost:8000") -> MCPServerStreamableHTTP:
-    """Create Scout MCP server connection.
-
-    Args:
-        base_url: Base URL where Sensei is running. If None, uses settings.sensei_host.
+def create_scout_server() -> FastMCPToolset:
+    """Create Scout toolset.
 
     Returns:
-        MCPServerStreamableHTTP instance configured for Scout
+        FastMCPToolset wrapping the Scout FastMCP server directly (no HTTP)
 
     Scout provides GitHub repository exploration tools:
-    - repo_map: Structural overview (classes, functions, signatures)
     - glob: Find files by pattern
     - read: Read file contents
     - grep: Search patterns with context
     - tree: Directory structure
     """
-    url = base_url or settings.sensei_host
-    return MCPServerStreamableHTTP(
-        f"{url}/scout/mcp",
-        tool_prefix="scout",
-    )
+    return FastMCPToolset(scout_mcp).prefixed("scout")

@@ -1,26 +1,18 @@
-"""Tome MCP client for llms.txt documentation."""
+"""Tome toolset for llms.txt documentation."""
 
-from pydantic_ai.mcp import MCPServerStreamableHTTP
+from pydantic_ai.toolsets.fastmcp import FastMCPToolset
 
-from sensei.config import settings
+from sensei.tome.server import mcp as tome_mcp
 
 
-def create_tome_server(base_url: str = "http://localhost:8000") -> MCPServerStreamableHTTP:
-    """Create Tome MCP server connection.
-
-    Args:
-        base_url: Base URL where Sensei is running. If None, uses settings.sensei_host.
+def create_tome_server() -> FastMCPToolset:
+    """Create Tome toolset.
 
     Returns:
-        MCPServerStreamableHTTP instance configured for Tome
+        FastMCPToolset wrapping the Tome FastMCP server directly (no HTTP)
 
     Tome provides llms.txt documentation tools:
-    - ingest: Ingest a domain's llms.txt and linked docs
     - get: Retrieve a document by domain and path
     - search: Full-text search within ingested documents
     """
-    url = base_url or settings.sensei_host
-    return MCPServerStreamableHTTP(
-        f"{url}/tome/mcp",
-        tool_prefix="tome",
-    )
+    return FastMCPToolset(tome_mcp).prefixed("tome")

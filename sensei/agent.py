@@ -3,6 +3,7 @@
 import logging
 from datetime import datetime, timezone
 
+from langfuse import get_client
 from pydantic_ai import Agent, RunContext, Tool
 from pydantic_ai.models.anthropic import AnthropicModel
 from pydantic_ai.models.google import GoogleModel
@@ -25,6 +26,10 @@ from sensei.tools.tome import create_tome_server
 from sensei.types import ToolError
 
 logger = logging.getLogger(__name__)
+
+langfuse = get_client()
+
+Agent.instrument_all()
 
 # Build system prompt from composable components
 SYSTEM_PROMPT = build_prompt("full_mcp")
@@ -66,6 +71,16 @@ gemini_model = GoogleModel("gemini-2.5-flash-lite", provider=GoogleProvider(api_
 
 # Default model for all agents
 DEFAULT_MODEL = gemini_model
+
+
+# =============================================================================
+# Helpers
+# =============================================================================
+
+
+def event_stream_handler(*args, **kwargs):
+    print(args)
+    print(kwargs)
 
 
 # =============================================================================
@@ -186,7 +201,9 @@ def create_agent(
             create_tome_server(),
         ],
         tools=tools,
+        event_stream_handler=event_stream_handler,
         instructions=[current_exec_plan, prefetch_cache_hits],
+        instrument=True,
     )
 
 

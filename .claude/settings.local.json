@@ -48,7 +48,8 @@
 			"mcp__plugin_sensei_kura__get",
 			"mcp__plugin_sensei_tome__get",
 			"WebFetch(domain:docs.polar.sh)",
-			"WebFetch(domain:polar.sh)"
+			"WebFetch(domain:polar.sh)",
+			"mcp__plugin_sensei_sensei__sensei_query"
 		],
 		"ask": [],
 		"deny": []

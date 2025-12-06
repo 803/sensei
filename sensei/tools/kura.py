@@ -1,25 +1,18 @@
-"""Kura MCP client for query response cache."""
+"""Kura toolset for query response cache."""
 
-from pydantic_ai.mcp import MCPServerStreamableHTTP
+from pydantic_ai.toolsets.fastmcp import FastMCPToolset
 
-from sensei.config import settings
+from sensei.kura.server import mcp as kura_mcp
 
 
-def create_kura_server(base_url: str = "http://localhost:8000") -> MCPServerStreamableHTTP:
-    """Create Kura MCP server connection.
-
-    Args:
-        base_url: Base URL where Sensei is running. If None, uses settings.sensei_host.
+def create_kura_server() -> FastMCPToolset:
+    """Create Kura toolset.
 
     Returns:
-        MCPServerStreamableHTTP instance configured for Kura
+        FastMCPToolset wrapping the Kura FastMCP server directly (no HTTP)
 
     Kura provides query response cache tools:
     - search: Full-text search across cached queries
     - get: Retrieve a full cached response by ID
     """
-    url = base_url or settings.sensei_host
-    return MCPServerStreamableHTTP(
-        f"{url}/kura/mcp",
-        tool_prefix="kura",
-    )
+    return FastMCPToolset(kura_mcp).prefixed("kura")
