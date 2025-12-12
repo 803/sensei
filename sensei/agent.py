@@ -1,9 +1,9 @@
 """PydanticAI agent definition for Sensei."""
 
+import json
 import logging
 from datetime import datetime, timezone
 
-from langfuse import get_client
 from pydantic_ai import Agent, RunContext, Tool
 from pydantic_ai.models.anthropic import AnthropicModel
 from pydantic_ai.models.google import GoogleModel
@@ -27,8 +27,6 @@ from sensei.types import ToolError
 
 logger = logging.getLogger(__name__)
 
-langfuse = get_client()
-
 Agent.instrument_all()
 
 # Build system prompt from composable components
@@ -51,7 +49,8 @@ async def prefetch_cache_hits(ctx: RunContext[deps_module.Deps]) -> str:
     for hit in ctx.deps.cache_hits:
         age_str = f"{hit.age_days}d ago" if hit.age_days > 0 else "today"
         lib_str = f" [{hit.library}]" if hit.library else ""
-        lines.append(f"- **{hit.query_id}**{lib_str} ({age_str}): {hit.query_truncated}")
+        query_truncated = hit.query[:100] + "..." if len(hit.query) > 100 else hit.query
+        lines.append(f"- **{hit.id}**{lib_str} ({age_str}): {query_truncated}")
     lines.append("\nUse `kura_get(query_id)` to retrieve full answer if relevant.\n")
     return "\n".join(lines)
 
@@ -139,7 +138,7 @@ async def spawn_sub_agent(
     # Check cache first
     hits = await storage.search_queries(sub_question, limit=1)
     if hits:
-        query = await storage.get_query(hits[0].query_id)
+        query = await storage.get_query(hits[0].id)
         if query:
             logger.info(f"Sub-question cache hit: {query.id}")
             age_days = _compute_age_days(query.inserted_at)
@@ -157,10 +156,11 @@ async def spawn_sub_agent(
     result = await sub_agent.run(sub_question, deps=sub_deps)
 
     # Cache the result
+    messages = json.loads(result.new_messages_json())
     await storage.save_query(
         query=sub_question,
         output=result.output,
-        messages=result.new_messages_json(),
+        messages=messages,
         parent_id=ctx.deps.query_id,
     )
 
@@ -171,12 +171,16 @@ async def spawn_sub_agent(
 def create_agent(
     include_spawn: bool = True,
     include_exec_plan: bool = True,
+    instrument: bool | object = True,
+    model: object | None = None,
 ) -> Agent[deps_module.Deps, str]:
     """Create an agent with configurable tools.
 
     Args:
         include_spawn: Include spawn_sub_agent tool (False for sub-agents)
         include_exec_plan: Include exec plan tools (False for sub-agents)
+        instrument: Instrumentation config (True for default tracing, or custom settings)
+        model: Model to use (defaults to DEFAULT_MODEL)
 
     Returns:
         Configured Agent instance
@@ -189,7 +193,7 @@ def create_agent(
         tools.append(Tool(spawn_sub_agent, takes_ctx=True))
 
     return Agent(
-        model=DEFAULT_MODEL,
+        model=model or DEFAULT_MODEL,
         system_prompt=SYSTEM_PROMPT,
         deps_type=deps_module.Deps,
         output_type=str,
@@ -201,9 +205,9 @@ def create_agent(
             create_tome_server(),
         ],
         tools=tools,
-        event_stream_handler=event_stream_handler,
+        # event_stream_handler=event_stream_handler,
         instructions=[current_exec_plan, prefetch_cache_hits],
-        instrument=True,
+        instrument=instrument,
     )
 
 

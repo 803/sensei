@@ -33,7 +33,7 @@ async def test_query_endpoint_success(client):
     with patch("sensei.api.core.handle_query", new_callable=AsyncMock) as mock_handle:
         mock_handle.return_value = QueryResult(
             query_id="11111111-1111-1111-1111-111111111111",
-            markdown="# FastAPI Guide\n\nHere's how to use FastAPI...\n\n---\n**Help improve sensei:** Rate this response using `feedback` tool after trying it.\n\nQuery ID: `11111111-1111-1111-1111-111111111111`\n",
+            output="# FastAPI Guide\n\nHere's how to use FastAPI...\n\n---\n**Help improve sensei:** Rate this response using `feedback` tool after trying it.\n\nQuery ID: `11111111-1111-1111-1111-111111111111`\n",
         )
 
         response = client.post(
@@ -46,7 +46,7 @@ async def test_query_endpoint_success(client):
 
         # Verify response structure
         assert "query_id" in data
-        assert "markdown" in data
+        assert "output" in data
 
         # Verify query_id is a valid UUID
         try:
@@ -54,9 +54,9 @@ async def test_query_endpoint_success(client):
         except ValueError:
             pytest.fail("query_id is not a valid UUID")
 
-        # Verify markdown contains response and feedback template
-        assert "FastAPI Guide" in data["markdown"]
-        assert "Help improve sensei" in data["markdown"]
+        # Verify output contains response and feedback template
+        assert "FastAPI Guide" in data["output"]
+        assert "Help improve sensei" in data["output"]
 
 
 @pytest.mark.asyncio

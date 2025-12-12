@@ -74,7 +74,7 @@ async def query(request: QueryRequest) -> QueryResponse:
             version=request.version,
         )
         logger.debug(f"Query successful: query_id={result.query_id}")
-        return QueryResponse(query_id=result.query_id, markdown=result.markdown)
+        return QueryResponse(query_id=result.query_id, output=result.output)
     except BrokenInvariant as e:
         logger.error(f"Service misconfigured: {e}")
         raise HTTPException(status_code=503, detail=f"{e}")

@@ -1,5 +1,6 @@
 """Core orchestration logic shared by API and MCP layers."""
 
+import json
 import logging
 from typing import AsyncIterator
 
@@ -48,7 +49,7 @@ async def _prepare_query(
 async def _save_query_result(
     query: str,
     output: str,
-    messages_json: bytes,
+    messages: list[dict] | None,
     language: str | None = None,
     library: str | None = None,
     version: str | None = None,
@@ -58,7 +59,7 @@ async def _save_query_result(
     Args:
         query: Original query text
         output: Agent output
-        messages_json: Serialized message history
+        messages: Message history (tool calls, results)
         language: Optional programming language
         library: Optional library/framework name
         version: Optional version specification
@@ -69,7 +70,7 @@ async def _save_query_result(
     query_id = await storage.save_query(
         query=query,
         output=output,
-        messages=messages_json,
+        messages=messages,
         language=language,
         library=library,
         version=version,
@@ -157,10 +158,11 @@ async def stream_query(
         if isinstance(event, AgentRunResultEvent):
             output = event.result.output
             logger.info(f"Agent completed successfully: {len(output)} chars")
+            messages = json.loads(event.result.new_messages_json())
             await _save_query_result(
                 query,
                 output,
-                event.result.new_messages_json(),
+                messages,
                 language,
                 library,
                 version,
@@ -195,17 +197,18 @@ async def handle_query(
     output = result.output
     logger.info(f"Agent completed successfully: {len(output)} chars")
 
+    messages = json.loads(result.new_messages_json())
     query_id = await _save_query_result(
         query,
         output,
-        result.new_messages_json(),
+        messages,
         language,
         library,
         version,
     )
 
     output_with_feedback = output + FEEDBACK_TEMPLATE.format(query_id=query_id)
-    return QueryResult(query_id=query_id, markdown=output_with_feedback)
+    return QueryResult(query_id=query_id, output=output_with_feedback)
 
 
 async def handle_rating(rating: Rating) -> None:

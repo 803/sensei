@@ -19,15 +19,15 @@ dependencies = [
     "anthropic>=0.75.0",
     "asyncpg>=0.30.0",
     "crawlee[httpx]>=0.6.0",
-    "deepeval>=3.7.4",
     "fastapi-cli[standard]>=0.0.16",
     "fastapi[standard]>=0.122.0",
-    "fastmcp>=2.13.1",
+    "fastmcp>=2.13.3",
     "greenlet>=3.2.4",
     "httpx>=0.28.1",
     "langfuse>=3.10.5",
     "mcp>=1.22.0",
     "pydantic-ai>=1.22.0",
+    "pydantic-evals[logfire]",
     "pydantic-settings>=2.11.7",
     "pydantic>=2.11.7",
     "ruff>=0.14.6",
@@ -57,7 +57,11 @@ dev = [
 include = ["sensei*"]
 
 [tool.setuptools.package-data]
-sensei = ["migrations/*.py", "migrations/*.mako", "migrations/versions/*.py"]
+sensei = [
+    "migrations/*.py",
+    "migrations/*.mako",
+    "migrations/versions/*.py",
+]
 
 [tool.ruff]
 line-length = 120

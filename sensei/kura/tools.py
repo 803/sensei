@@ -83,8 +83,10 @@ async def search_cache(
         age_str = f"{hit.age_days} days ago" if hit.age_days > 0 else "today"
         lib_str = f" [{hit.library}]" if hit.library else ""
         ver_str = f" v{hit.version}" if hit.version else ""
-        lines.append(f"- **{hit.query_id}**{lib_str}{ver_str} ({age_str})")
-        lines.append(f"  {hit.query_truncated}")
+        # Truncate query for display
+        query_truncated = hit.query[:100] + "..." if len(hit.query) > 100 else hit.query
+        lines.append(f"- **{hit.id}**{lib_str}{ver_str} ({age_str})")
+        lines.append(f"  {query_truncated}")
         lines.append("")
 
     return Success("\n".join(lines))

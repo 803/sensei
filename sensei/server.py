@@ -71,8 +71,8 @@ async def query(
             library=library,
             version=version,
         )
-        logger.debug(f"Query successful: query_id={result.query_id}, length={len(result.markdown)}")
-        return result.markdown
+        logger.debug(f"Query successful: query_id={result.query_id}, length={len(result.output)}")
+        return result.output
     except BrokenInvariant as e:
         logger.error(f"Service misconfigured: {e}", exc_info=True)
         raise MCPToolError(f"Service misconfigured: {e}")

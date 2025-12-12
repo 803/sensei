@@ -16,7 +16,7 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
-from sqlalchemy.dialects.postgresql import TSVECTOR, UUID
+from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR, UUID
 from sqlalchemy.orm import declarative_base, declared_attr
 
 
@@ -55,7 +55,7 @@ class Query(TimestampMixin, Base):
     library = Column(String, nullable=True)  # Library/framework name
     version = Column(String, nullable=True)  # Version specification
     output = Column(Text, nullable=False)  # Final text output from agent
-    messages = Column(Text, nullable=True)  # JSON: all intermediate messages (tool calls, results)
+    messages = Column(JSONB, nullable=True)  # All intermediate messages (tool calls, results)
     parent_id = Column(UUID(as_uuid=True), ForeignKey("queries.id"), nullable=True)
     # Full-text search vector for efficient cache search
     query_tsvector = Column(

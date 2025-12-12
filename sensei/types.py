@@ -182,7 +182,7 @@ class QueryResult(BaseModel):
     """Result of a query operation."""
 
     query_id: UUID = Field(..., description="Unique identifier for this query")
-    markdown: str = Field(..., description="Markdown documentation with code examples")
+    output: str = Field(..., description="Markdown documentation with code examples")
 
 
 class Rating(BaseModel):
@@ -226,7 +226,7 @@ class SubSenseiResult(BaseModel):
     """Result from spawning a sub-sensei."""
 
     query_id: UUID
-    response_markdown: str
+    response_output: str
     from_cache: bool
     age_days: int | None = None
 

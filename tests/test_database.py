@@ -31,13 +31,13 @@ async def test_save_query_with_messages(test_db):
     """Test saving a query with messages."""
     query = "What is Python?"
     markdown = "# Python\n\nPython is..."
-    messages = b'[{"role": "user", "content": "test"}]'
+    messages = [{"role": "user", "content": "test"}]
 
     query_id = await storage.save_query(query=query, output=markdown, messages=messages)
 
     retrieved = await storage.get_query(query_id)
     assert retrieved is not None
-    assert retrieved.messages == '[{"role": "user", "content": "test"}]'
+    assert retrieved.messages == [{"role": "user", "content": "test"}]
 
 
 @pytest.mark.asyncio
@@ -665,7 +665,7 @@ async def test_save_query_with_all_optional_fields(test_db):
     query_id = await storage.save_query(
         query="How to use TypeScript generics?",
         output="# Generics\n\nGeneric types allow...",
-        messages=b'[{"role": "assistant", "content": "Let me explain..."}]',
+        messages=[{"role": "assistant", "content": "Let me explain..."}],
         language="typescript",
         library="typescript",
         version="5.0",

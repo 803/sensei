@@ -35,7 +35,7 @@ async def test_query_tool_success(mcp_client: Client, monkeypatch):
     monkeypatch.setattr(
         "sensei.core.handle_query",
         AsyncMock(
-            return_value=QueryResult(query_id=test_uuid, markdown="# Test Response\n\nHere's the documentation...")
+            return_value=QueryResult(query_id=test_uuid, output="# Test Response\n\nHere's the documentation...")
         ),
     )
 

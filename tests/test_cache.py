@@ -11,15 +11,21 @@ from sensei.types import CacheHit, SubSenseiResult
 
 def test_cache_hit_model():
     """Test CacheHit domain model."""
+    from datetime import UTC, datetime
+
     test_uuid = UUID("12345678-1234-5678-1234-567812345678")
+    now = datetime.now(UTC)
     hit = CacheHit(
-        query_id=test_uuid,
-        query_truncated="How do React hooks...",
+        id=test_uuid,
+        query="How do React hooks work?",
+        output="# React Hooks\n\nHooks are...",
         age_days=5,
         library="react",
         version="18.0",
+        inserted_at=now,
+        updated_at=now,
     )
-    assert hit.query_id == test_uuid
+    assert hit.id == test_uuid
     assert hit.age_days == 5
 
 
@@ -31,7 +37,7 @@ def test_sub_sensei_result_model():
     # From cache
     result_cached = SubSenseiResult(
         query_id=uuid1,
-        response_markdown="# Answer\n\n...",
+        response_output="# Answer\n\n...",
         from_cache=True,
         age_days=10,
     )
@@ -41,7 +47,7 @@ def test_sub_sensei_result_model():
     # Fresh result
     result_fresh = SubSenseiResult(
         query_id=uuid2,
-        response_markdown="# Fresh Answer\n\n...",
+        response_output="# Fresh Answer\n\n...",
         from_cache=False,
         age_days=None,
     )
@@ -63,9 +69,28 @@ async def test_search_cache_tool():
     """Test search_cache tool returns formatted results."""
     uuid1 = UUID("11111111-1111-1111-1111-111111111111")
     uuid2 = UUID("22222222-2222-2222-2222-222222222222")
+    now = datetime.now(UTC)
     mock_hits = [
-        CacheHit(query_id=uuid1, query_truncated="React hooks...", age_days=5, library="react", version="18"),
-        CacheHit(query_id=uuid2, query_truncated="React state...", age_days=10, library="react", version=None),
+        CacheHit(
+            id=uuid1,
+            query="React hooks...",
+            output="# Hooks\n\n...",
+            age_days=5,
+            library="react",
+            version="18",
+            inserted_at=now,
+            updated_at=now,
+        ),
+        CacheHit(
+            id=uuid2,
+            query="React state...",
+            output="# State\n\n...",
+            age_days=10,
+            library="react",
+            version=None,
+            inserted_at=now,
+            updated_at=now,
+        ),
     ]
 
     with patch("sensei.kura.tools.storage.search_queries", new_callable=AsyncMock) as mock_search:

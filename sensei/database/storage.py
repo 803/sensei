@@ -58,7 +58,7 @@ def _to_cache_hit(q: Query, age_days: int) -> CacheHit:
 async def save_query(
     query: str,
     output: str,
-    messages: bytes | None = None,
+    messages: list[dict] | None = None,
     language: Optional[str] = None,
     library: Optional[str] = None,
     version: Optional[str] = None,
@@ -69,7 +69,7 @@ async def save_query(
     Args:
         query: The user's query string
         output: The final text output from the agent
-        messages: JSON bytes of all intermediate messages (from result.new_messages_json())
+        messages: List of all intermediate messages (tool calls, results)
         language: Optional programming language filter
         library: Optional library/framework name
         version: Optional version specification
@@ -86,7 +86,7 @@ async def save_query(
             library=library,
             version=version,
             output=output,
-            messages=messages.decode("utf-8") if messages else None,
+            messages=messages,
             parent_id=parent_id,
         )
         session.add(query_record)
