@@ -1,7 +1,7 @@
 name: general
 
 cases:
-  - name: general-async-await-01
+  - name: general-pdyantic-01
     inputs: "How can I use langfuse and logfire together as instrumentation in pydanticAI?"
     metadata:
       tags: [pydantic, langfuse, logfire]

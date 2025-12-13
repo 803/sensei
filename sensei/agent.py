@@ -28,11 +28,11 @@ from sensei.types import ToolError
 
 logger = logging.getLogger(__name__)
 
-logfire.configure()
-logfire.instrument_pydantic_ai()
-logfire.instrument_httpx(capture_all=True)
-
-Agent.instrument_all()
+# Configure logfire only if token is available
+if settings.logfire_token:
+    logfire.configure(token=settings.logfire_token, service_name=settings.logfire_service_name)
+    logfire.instrument_pydantic_ai()
+    Agent.instrument_all()
 
 # Build system prompt from composable components
 SYSTEM_PROMPT = build_prompt("full_mcp")

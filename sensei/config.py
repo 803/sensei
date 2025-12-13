@@ -41,6 +41,14 @@ class Settings(BaseSettings):
     )
 
     # Observability
+    logfire_token: str = Field(
+        default="",
+        description="Logfire write token for tracing",
+    )
+    logfire_service_name: str = Field(
+        default="sensei",
+        description="Service name for Logfire tracing",
+    )
     langfuse_public_key: str = Field(
         default="",
         description="Langfuse public key for production tracing",
