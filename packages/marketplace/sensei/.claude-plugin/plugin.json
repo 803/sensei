@@ -8,11 +8,12 @@
 	"license": "MIT",
 	"mcpServers": {
 		"sensei": {
-			"type": "http",
-			"url": "http://127.0.0.1:8000/mcp"
+			"args": ["sensei-ai"],
+			"command": "uvx",
+			"type": "stdio"
 		}
 	},
 	"name": "sensei",
 	"repository": "https://github.com/alizain/sensei",
-	"version": "1.3.0"
+	"version": "1.4.0"
 }
