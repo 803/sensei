@@ -6,9 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from sensei.paths import get_local_database_url
 
 
-class Settings(BaseSettings):
-    """Application settings loaded from environment variables."""
-
+class GeneralSettings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
@@ -40,7 +38,7 @@ class Settings(BaseSettings):
         description="Tavily API key for MCP server",
     )
 
-    # Observability
+    # [Observability] Logfire
     logfire_token: str = Field(
         default="",
         description="Logfire write token for tracing",
@@ -49,9 +47,11 @@ class Settings(BaseSettings):
         default="sensei",
         description="Service name for Logfire tracing",
     )
+
+    # [Observability] Langfuse
     langfuse_public_key: str = Field(
         default="",
-        description="Langfuse public key for production tracing",
+        description="Langfuse public key for production tracing"
     )
     langfuse_secret_key: str = Field(
         default="",
@@ -60,6 +60,16 @@ class Settings(BaseSettings):
     langfuse_host: str = Field(
         default="https://us.cloud.langfuse.com",
         description="Langfuse host URL",
+    )
+
+
+class SenseiSettings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        env_prefix="SENSEI_",
+        case_sensitive=False,
+        extra="ignore",
     )
 
     # Database
@@ -79,7 +89,7 @@ class Settings(BaseSettings):
         return self.database_url != get_local_database_url()
 
     # Server settings
-    sensei_host: str = Field(
+    host: str = Field(
         default="",
         description="Base URL where Sensei server is running",
     )
@@ -95,5 +105,5 @@ class Settings(BaseSettings):
     )
 
 
-# Global settings instance
-settings = Settings()
+general_settings = GeneralSettings()
+sensei_settings = SenseiSettings()

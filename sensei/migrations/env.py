@@ -6,15 +6,15 @@ from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-from sensei.config import settings
+from sensei.settings import sensei_settings
 from sensei.database.models import Base
 
 config = context.config
 
 # Use DATABASE_URL from settings only as a fallback.
 # This allows tests to override the URL via config.set_main_option() before running migrations.
-if not config.get_main_option("sqlalchemy.url") and settings.database_url:
-    config.set_main_option("sqlalchemy.url", settings.database_url)
+if not config.get_main_option("sqlalchemy.url") and sensei_settings.database_url:
+    config.set_main_option("sqlalchemy.url", sensei_settings.database_url)
 
 target_metadata = Base.metadata
 

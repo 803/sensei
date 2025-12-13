@@ -11,7 +11,7 @@ from pydantic_ai.mcp import MCPServerStreamableHTTP
 from pydantic_ai.models.google import GoogleModel
 from pydantic_ai.providers.google import GoogleProvider
 
-from sensei.config import settings
+from sensei.settings import general_settings
 
 
 async def main():
@@ -23,7 +23,7 @@ async def main():
 
     model = GoogleModel(
         "gemini-2.5-flash-lite",
-        provider=GoogleProvider(api_key=settings.google_api_key),
+        provider=GoogleProvider(api_key=general_settings.google_api_key),
     )
 
     agent = Agent(

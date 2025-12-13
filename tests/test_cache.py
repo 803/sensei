@@ -57,9 +57,9 @@ def test_sub_sensei_result_model():
 
 def test_cache_config_defaults():
     """Test cache config has correct defaults."""
-    from sensei.config import Settings
+    from sensei.settings import SenseiSettings
 
-    s = Settings()
+    s = SenseiSettings()
     assert s.cache_ttl_days == 30
     assert s.max_recursion_depth == 2
 

@@ -6,7 +6,7 @@ from uuid import UUID
 import httpx
 from pydantic import BaseModel, ConfigDict, Field
 
-from sensei.config import settings
+from sensei.settings import sensei_settings
 from sensei.types import CacheHit
 
 
@@ -20,7 +20,7 @@ class Deps(BaseModel):
     # Sub-sensei context
     parent_id: UUID | None = None
     current_depth: int = 0
-    max_depth: int = settings.max_recursion_depth
+    max_depth: int = sensei_settings.max_recursion_depth
     # Prefetched cache hits
     cache_hits: list[CacheHit] = Field(default_factory=list)
     # ExecPlan for this request (request-scoped, no global state)

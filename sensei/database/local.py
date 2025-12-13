@@ -113,13 +113,13 @@ async def ensure_migrated() -> None:
     from alembic import command
     from alembic.config import Config
 
-    from sensei.config import settings
+    from sensei.settings import sensei_settings
 
     # Build alembic config programmatically (works when installed as package)
     config = Config()
     config.set_main_option("script_location", "sensei:migrations")
     # Alembic needs sync URL (no +asyncpg)
-    sync_url = settings.database_url.replace("+asyncpg", "")
+    sync_url = sensei_settings.database_url.replace("+asyncpg", "")
     config.set_main_option("sqlalchemy.url", sync_url)
 
     # Run migrations (sync operation, run in thread pool)
@@ -151,9 +151,9 @@ async def ensure_db_ready() -> None:
         logger.debug("ensure_db_ready() already completed, skipping")
         return
 
-    from sensei.config import settings
+    from sensei.settings import sensei_settings
 
-    if settings.is_external_database:
+    if sensei_settings.is_external_database:
         # External DB - user is responsible for setup and migrations
         _db_ready = True
         return

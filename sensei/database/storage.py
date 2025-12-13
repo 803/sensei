@@ -7,7 +7,7 @@ from uuid import UUID
 from sqlalchemy import Integer, delete, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from sensei.config import settings
+from sensei.settings import sensei_settings
 from sensei.database.models import Document, Query, Section
 from sensei.database.models import Rating as RatingModel
 from sensei.types import CacheHit, Rating, SearchResult
@@ -24,7 +24,7 @@ def _get_engine():
     global _engine
     if _engine is None:
         _engine = create_async_engine(
-            settings.database_url,
+            sensei_settings.database_url,
             echo=False,
             future=True,
         )

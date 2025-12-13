@@ -15,7 +15,7 @@ from pydantic_ai.providers.grok import GrokProvider
 from pydantic_ai.providers.openai import OpenAIProvider
 
 from sensei import deps as deps_module
-from sensei.config import settings
+from sensei.settings import general_settings
 from sensei.database import storage
 from sensei.prompts import build_prompt
 from sensei.tools.common import wrap_tool
@@ -29,8 +29,8 @@ from sensei.types import ToolError
 logger = logging.getLogger(__name__)
 
 # Configure logfire only if token is available
-if settings.logfire_token:
-    logfire.configure(token=settings.logfire_token, service_name=settings.logfire_service_name)
+if general_settings.logfire_token:
+    logfire.configure(token=general_settings.logfire_token, service_name=general_settings.logfire_service_name)
     logfire.instrument_pydantic_ai()
     Agent.instrument_all()
 
@@ -66,14 +66,14 @@ async def prefetch_cache_hits(ctx: RunContext[deps_module.Deps]) -> str:
 
 grok_model = OpenAIChatModel(
     "grok-4-1-fast-reasoning",
-    provider=GrokProvider(api_key=settings.grok_api_key),
+    provider=GrokProvider(api_key=general_settings.grok_api_key),
 )
 
 chatgpt_model = OpenAIChatModel("", provider=OpenAIProvider(api_key=""))
 
-haiku_model = AnthropicModel("claude-sonnet-4-5", provider=AnthropicProvider(api_key=settings.anthropic_api_key))
+haiku_model = AnthropicModel("claude-sonnet-4-5", provider=AnthropicProvider(api_key=general_settings.anthropic_api_key))
 
-gemini_model = GoogleModel("gemini-2.5-flash-lite", provider=GoogleProvider(api_key=settings.google_api_key))
+gemini_model = GoogleModel("gemini-2.5-flash-lite", provider=GoogleProvider(api_key=general_settings.google_api_key))
 
 DEFAULT_MODEL = grok_model
 
@@ -204,8 +204,8 @@ def create_agent(
         deps_type=deps_module.Deps,
         output_type=str,
         toolsets=[
-            create_context7_server(settings.context7_api_key),
-            create_tavily_server(settings.tavily_api_key),
+            create_context7_server(general_settings.context7_api_key),
+            create_tavily_server(general_settings.tavily_api_key),
             create_scout_server(),
             # create_kura_server(),
             create_tome_server(),

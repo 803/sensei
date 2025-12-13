@@ -3,7 +3,7 @@
 	"author": {
 		"name": "Alizain Feerasta"
 	},
-	"description": "Documentation research agent with Scout for repository exploration",
+	"description": "Documentation research sub-agent",
 	"keywords": ["scout", "repo-map", "code-exploration", "documentation", "research"],
 	"license": "MIT",
 	"mcpServers": {

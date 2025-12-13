@@ -53,7 +53,7 @@ async def test_ensure_db_ready_skips_for_external_db():
     mock_settings = type("MockSettings", (), {"is_external_database": True})()
 
     with (
-        patch("sensei.config.settings", mock_settings),
+        patch("sensei.settings.sensei_settings", mock_settings),
         patch.object(local, "check_postgres_installed") as mock_check,
     ):
         await local.ensure_db_ready()
@@ -74,7 +74,7 @@ async def test_ensure_db_ready_idempotent():
     mock_settings = type("MockSettings", (), {"is_external_database": False})()
 
     with (
-        patch("sensei.config.settings", mock_settings),
+        patch("sensei.settings.sensei_settings", mock_settings),
         patch.object(local, "check_postgres_installed", return_value=True),
         patch.object(local, "is_initialized", return_value=True),
         patch.object(local, "is_running", return_value=True),
