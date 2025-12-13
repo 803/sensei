@@ -6,18 +6,11 @@ from datetime import datetime, timezone
 
 import logfire
 from pydantic_ai import Agent, RunContext, Tool
-from pydantic_ai.models.anthropic import AnthropicModel
-from pydantic_ai.models.google import GoogleModel
-from pydantic_ai.models.openai import OpenAIChatModel
-from pydantic_ai.providers.anthropic import AnthropicProvider
-from pydantic_ai.providers.google import GoogleProvider
-from pydantic_ai.providers.grok import GrokProvider
-from pydantic_ai.providers.openai import OpenAIProvider
 
 from sensei import deps as deps_module
-from sensei.settings import general_settings
 from sensei.database import storage
 from sensei.prompts import build_prompt
+from sensei.settings import general_settings, sensei_settings
 from sensei.tools.common import wrap_tool
 from sensei.tools.context7 import create_context7_server
 from sensei.tools.exec_plan import add_exec_plan, update_exec_plan
@@ -64,18 +57,18 @@ async def prefetch_cache_hits(ctx: RunContext[deps_module.Deps]) -> str:
 # Model Definitions
 # =============================================================================
 
-grok_model = OpenAIChatModel(
-    "grok-4-1-fast-reasoning",
-    provider=GrokProvider(api_key=general_settings.grok_api_key),
-)
+# grok_model = OpenAIChatModel(
+#     "grok-4-1-fast-reasoning",
+#     provider=GrokProvider(api_key=general_settings.grok_api_key),
+# )
 
-chatgpt_model = OpenAIChatModel("", provider=OpenAIProvider(api_key=""))
+# chatgpt_model = OpenAIChatModel("", provider=OpenAIProvider(api_key=""))
 
-haiku_model = AnthropicModel("claude-sonnet-4-5", provider=AnthropicProvider(api_key=general_settings.anthropic_api_key))
+# haiku_model = AnthropicModel("claude-sonnet-4-5", provider=AnthropicProvider(api_key=general_settings.anthropic_api_key))
 
-gemini_model = GoogleModel("gemini-2.5-flash-lite", provider=GoogleProvider(api_key=general_settings.google_api_key))
+# gemini_model = GoogleModel("gemini-2.5-flash-lite", provider=GoogleProvider(api_key=general_settings.google_api_key))
 
-DEFAULT_MODEL = grok_model
+# DEFAULT_MODEL = grok_model
 
 
 # =============================================================================
@@ -199,7 +192,7 @@ def create_agent(
         tools.append(Tool(spawn_sub_agent, takes_ctx=True))
 
     return Agent(
-        model=model or DEFAULT_MODEL,
+        model=model or sensei_settings.model,
         system_prompt=SYSTEM_PROMPT,
         deps_type=deps_module.Deps,
         output_type=str,
