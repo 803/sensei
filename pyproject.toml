@@ -38,8 +38,8 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/alizain/sensei"
-Repository = "https://github.com/alizain/sensei"
+Homepage = "https://github.com/803/sensei"
+Repository = "https://github.com/803/sensei"
 
 [project.scripts]
 sensei-ai = "sensei.__main__:main"
@@ -82,6 +82,7 @@ override-dependencies = [
 
 [dependency-groups]
 dev = [
+    "pre-commit>=4.0.0",
     "pytest>=9.0.1",
     "pytest-asyncio>=1.3.0",
 ]

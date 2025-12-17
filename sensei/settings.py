@@ -109,7 +109,7 @@ class SenseiSettings(BaseSettings):
     )
 
     # LLM model
-    model: str = Field(default="", description="Which model & provider to use")
+    model: str = Field(default="anthropic:claude-opus-4-5-20250219", description="Which model & provider to use")
 
     # Database
     database_url: str = Field(
@@ -130,12 +130,6 @@ class SenseiSettings(BaseSettings):
         (user is responsible for their own DB).
         """
         return self.database_url != get_local_database_url()
-
-    # Server settings
-    host: str = Field(
-        default="",
-        description="Base URL where Sensei server is running",
-    )
 
     # Cache settings
     cache_ttl_days: int = Field(

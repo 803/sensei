@@ -49,7 +49,12 @@
 			"mcp__plugin_sensei_tome__get",
 			"WebFetch(domain:docs.polar.sh)",
 			"WebFetch(domain:polar.sh)",
-			"mcp__plugin_sensei_sensei__sensei_query"
+			"mcp__plugin_sensei_sensei__sensei_query",
+			"WebFetch(domain:raw.githubusercontent.com)",
+			"WebFetch(domain:packaging.python.org)",
+			"WebFetch(domain:docs.astral.sh)",
+			"WebFetch(domain:gofastmcp.com)",
+			"WebFetch(domain:docs.cloud.google.com)"
 		],
 		"ask": [],
 		"deny": []

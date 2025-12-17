@@ -1,1 +1,1 @@
-web: python -m sensei -t http --host 0.0.0.0 --port ${PORT:-8080}
+web: python -m sensei.api --host 0.0.0.0 -p ${PORT:-8080}

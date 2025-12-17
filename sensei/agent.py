@@ -14,6 +14,7 @@ from sensei.tools.common import wrap_tool
 from sensei.tools.context7 import create_context7_server
 from sensei.tools.exec_plan import add_exec_plan, update_exec_plan
 from sensei.tools.scout import create_scout_server
+from sensei.tools.grep import create_grep_server
 from sensei.tools.tavily import create_tavily_server
 from sensei.tools.tome import create_tome_server
 from sensei.types import ToolError
@@ -181,6 +182,7 @@ def create_agent(
         output_type=str,
         toolsets=[
             create_context7_server(general_settings.context7_api_key),
+            create_grep_server(),
             create_tavily_server(general_settings.tavily_api_key),
             create_scout_server(),
             # create_kura_server(),
