@@ -238,27 +238,3 @@ async def internal_error_handler(request, exc):
         status_code=500,
         content={"detail": "Internal server error"},
     )
-
-
-def main():
-    """Entry point for `python -m sensei.api`."""
-    import argparse
-
-    import uvicorn
-
-    parser = argparse.ArgumentParser(prog="sensei.api", description="Sensei REST API server")
-    parser.add_argument(
-        "--host",
-        default="127.0.0.1",
-        help="Host to bind to (default: 127.0.0.1)",
-    )
-    parser.add_argument(
-        "-p",
-        "--port",
-        type=int,
-        default=8000,
-        help="Port to bind to (default: 8000)",
-    )
-
-    args = parser.parse_args()
-    uvicorn.run(app, host=args.host, port=args.port)

@@ -43,7 +43,7 @@ Repository = "https://github.com/803/sensei"
 
 [project.scripts]
 sensei-ai = "sensei.__main__:main"
-api = "sensei.api:main"
+start = "sensei.api.__main__:main"
 scout = "sensei.scout:main"
 kura = "sensei.kura:main"
 tome = "sensei.tome:main"
@@ -74,11 +74,6 @@ docstring-code-format = true
 
 [tool.uv]
 package = true
-override-dependencies = [
-    "openai>=1.107.2",
-    "typing-extensions>=4.15.0",
-    "cachetools>=6.2.2",
-]
 
 [dependency-groups]
 dev = [

@@ -45,6 +45,27 @@ docs/
 # Build artifacts
 *.tar.gz
 *.whl
+*.egg-info/
+dist/
+
+# Not needed for deployment
+deploy.sh
+docker-compose.yml
+biome.json
+package.json
+package-lock.json
+tsconfig*.json
+turbo.json
+scripts/
+notes/
+python_modules/
+.pre-commit-config.yaml
+.editorconfig
+.github/
+logo.txt
+mise.toml
+tome-seeds.txt
+alembic.ini
 
 # OS
 .DS_Store

@@ -87,7 +87,7 @@ gcloud services enable \
 log "Syncing secrets from Doppler to GCP Secret Manager..."
 
 # Get all secrets from Doppler as JSON
-SECRETS_JSON=$(doppler secrets get \
+SECRETS_JSON=$(doppler secrets \
     --project "$DOPPLER_PROJECT" \
     --config "$DOPPLER_CONFIG" \
     --json)
@@ -180,7 +180,7 @@ gcloud run deploy "$SERVICE_NAME" \
     --concurrency=80 \
     --min-instances=0 \
     --max-instances=10 \
-    --startup-cpu-boost
+    --cpu-boost
 
 # =============================================================================
 # Output Service URL

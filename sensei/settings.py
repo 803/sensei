@@ -53,6 +53,10 @@ class GeneralSettings(BaseSettings):
         extra="ignore",
     )
 
+    # Server settings (Cloud Run sets PORT)
+    port: int = Field(default=8000, description="Port to bind to (Cloud Run sets PORT)")
+    host: str = Field(default="0.0.0.0", description="Host to bind to")
+
     # LLM API Keys
     anthropic_api_key: str = Field(
         default="",
@@ -109,7 +113,7 @@ class SenseiSettings(BaseSettings):
     )
 
     # LLM model
-    model: str = Field(default="anthropic:claude-opus-4-5-20250219", description="Which model & provider to use")
+    model: str = Field(default="google-gla:gemini-3-pro-preview", description="Which model & provider to use")
 
     # Database
     database_url: str = Field(
