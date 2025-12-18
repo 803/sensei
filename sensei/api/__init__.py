@@ -312,6 +312,12 @@ async def rate(request: RatingRequest) -> RatingResponse:
         raise HTTPException(status_code=500, detail=f"Failed to save rating: {e}")
 
 
+@app.get("/")
+async def root() -> dict:
+    """Root endpoint for deployment health checks."""
+    return {}
+
+
 @app.get("/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
     """Health check endpoint.
