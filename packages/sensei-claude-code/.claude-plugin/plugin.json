@@ -1,24 +1,18 @@
 {
-	"agents": ["./agents/sensei.md"],
 	"author": {
 		"name": "Alizain Feerasta"
 	},
-	"description": "Documentation research sub-agent",
-	"keywords": ["scout", "repo-map", "code-exploration", "documentation", "research"],
+	"description": "Documentation research methodology and tools for finding the right answers",
+	"keywords": ["documentation", "research", "sensei", "context7", "tavily"],
 	"license": "MIT",
 	"mcpServers": {
-		"scout": {
-			"args": ["--from", "sensei-ai", "scout"],
-			"command": "uvx",
-			"type": "stdio"
-		},
-		"tome": {
-			"args": ["--from", "sensei-ai", "tome"],
-			"command": "uvx",
-			"type": "stdio"
+		"sensei": {
+			"type": "http",
+			"url": "http://localhost:3000/mcp"
 		}
 	},
 	"name": "sensei",
 	"repository": "https://github.com/803/sensei",
+	"skills": ["./skills/documentation-research/SKILL.md"],
 	"version": "1.4.1"
 }

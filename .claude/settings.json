@@ -4,6 +4,9 @@
 		"allow": [
 			"Bash(bd:*)",
 			"Bash(cat:*)",
+			"Bash(uv run ruff:*)",
+			"Bash(uv run ruff check:*)",
+			"Bash(tree:*)",
 			"Bash(fly logs:*)",
 			"Bash(gcloud builds list:*)",
 			"Bash(gcloud logging read:*)",

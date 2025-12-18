@@ -6,6 +6,7 @@ Provides HTTP endpoints for non-MCP clients:
 - POST /api/chat - Vercel AI SDK streaming endpoint (lightweight, no DB save)
 - POST /rate - Rate a query response
 - GET /health - Health check
+- /mcp/* - MCP server endpoint (unified: sensei, scout, kura, tome tools)
 
 Usage:
     python -m sensei.api              # HTTP on port 8000
@@ -43,20 +44,24 @@ from sensei.api.models import (
     RatingResponse,
 )
 from sensei.build import build_deps
-from sensei.database.local import ensure_db_ready
 from sensei.types import BrokenInvariant, ToolError, TransientError
+from sensei.unified import mcp
 
 logger = logging.getLogger(__name__)
 
 # Rate limiter with in-memory storage (default)
 limiter = Limiter(key_func=get_remote_address)
 
+# Create MCP ASGI app for mounting
+mcp_app = mcp.http_app(path="/mcp")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Ensure database is ready before handling requests."""
-    await ensure_db_ready()
-    yield
+    """Combined lifespan for FastAPI and MCP servers."""
+    # MCP lifespan handles database initialization via unified.py
+    async with mcp_app.lifespan(app):
+        yield
 
 
 app = FastAPI(
@@ -65,6 +70,9 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+# Mount MCP server at /mcp
+app.mount("/mcp", mcp_app)
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)

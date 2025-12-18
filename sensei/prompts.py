@@ -331,24 +331,124 @@ CONTEXT_CLAUDE_CODE = dedent("""\
     """)
 
 # =============================================================================
+# SKILL - Documentation research methodology for Claude Code
+# =============================================================================
+
+SKILL_INTRO = dedent("""\
+    # Documentation Research
+
+    This skill teaches effective documentation research — finding the *right*
+    answer, not just *an* answer. Use these techniques when researching library
+    APIs, framework patterns, best practices, or troubleshooting external code.
+    """)
+
+SKILL_SENSEI_QUERY = dedent("""\
+    ## The sensei_query Tool
+
+    For complex, multi-source research, use `sensei_query`. It handles:
+    - **Query decomposition** — breaks complex questions into focused sub-queries
+    - **Multi-source search** — searches official docs, GitHub, web, and cached results
+    - **Confidence scoring** — ranks results by source authority
+    - **Caching** — stores results for instant retrieval on similar questions
+
+    ```
+    sensei_query(query="How to implement middleware auth in Next.js 15 App Router")
+    ```
+
+    Use sensei_query when:
+    - The question spans multiple topics or sources
+    - You need authoritative, up-to-date documentation
+    - The question might benefit from cached previous research
+
+    For simpler research, or when you want more control, use the methodology below
+    with the available tools directly.
+    """)
+
+SKILL_TOOL_SELECTION = dedent("""\
+    ## Tool Selection
+
+    The sensei MCP provides these tools for direct use:
+
+    ### Kura (Cache)
+    - `kura_search(query)` — Search cached research results
+    - `kura_get(id)` — Retrieve a specific cached result
+
+    **Always check Kura first** for repeated or similar questions. Cache hits are
+    instant and often contain high-quality synthesized answers.
+
+    ### Scout (GitHub Exploration)
+    - `scout_glob(repo, pattern)` — Find files in external repos
+    - `scout_read(repo, path)` — Read file contents
+    - `scout_grep(repo, pattern)` — Search code in repos
+    - `scout_tree(repo)` — View repo structure
+
+    Use Scout for exploring external repositories — library source code, examples,
+    type definitions. For the **current workspace**, use native tools (Read, Grep,
+    Glob) which are faster and more integrated.
+
+    ### Tome (llms.txt Documentation)
+    - `tome_search(query)` — Search indexed llms.txt documentation
+    - `tome_get(url)` — Retrieve specific documentation
+
+    Use Tome for libraries that publish llms.txt files — these are curated,
+    AI-friendly documentation.
+
+    ### Other Tools (If Available)
+
+    Depending on your configuration, you may also have:
+    - **Context7** — Official library documentation index
+    - **Tavily/WebSearch** — Web search for blogs, tutorials, Stack Overflow
+    - **WebFetch** — Fetch and read specific URLs
+
+    Check your available tools and use the **Choosing Sources** methodology below
+    to pick the right tool for each research goal.
+    """)
+
+# =============================================================================
 # Composer
 # =============================================================================
 
-Context = Literal["full_mcp", "sub_agent_mcp", "claude_code"]
+Context = Literal["full_mcp", "sub_agent_mcp", "claude_code", "claude_code_skill"]
 
 
 def build_prompt(context: Context) -> str:
     """Build a complete system prompt for the given context.
 
     Args:
-        context: One of "full_mcp", "sub_agent_mcp", or "claude_code"
+        context: One of:
+            - "full_mcp": Full PydanticAI agent with all capabilities
+            - "sub_agent_mcp": Restricted sub-agent (no spawning)
+            - "claude_code": Claude Code subagent (executes research)
+            - "claude_code_skill": Claude Code skill (orchestrates sensei_query)
 
     Returns:
         Complete system prompt string
     """
-    if context not in ("full_mcp", "sub_agent_mcp", "claude_code"):
+    valid_contexts = ("full_mcp", "sub_agent_mcp", "claude_code", "claude_code_skill")
+    if context not in valid_contexts:
         raise ValueError(f"Unknown context: {context}")
 
+    # Skill teaches research methodology with tool guidance
+    if context == "claude_code_skill":
+        parts = [
+            # Introduction and sensei_query (the easy path)
+            SKILL_INTRO,
+            SKILL_SENSEI_QUERY,
+            # Core research methodology
+            RESEARCH_METHODOLOGY,
+            ENGINEERING_JUDGMENT,
+            CHOOSING_SOURCES,
+            # Tool selection (after methodology so reader understands context)
+            SKILL_TOOL_SELECTION,
+            # Communication and reporting
+            CONFIDENCE_LEVELS,
+            HANDLING_AMBIGUITY,
+            REPORTING_RESULTS,
+            CITATIONS,
+        ]
+        return "\n".join(parts)
+
+    # Agent contexts - full research methodology
     parts = [
         # Core identity
         IDENTITY,
