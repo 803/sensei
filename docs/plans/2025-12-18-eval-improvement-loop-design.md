@@ -571,18 +571,125 @@ Same evaluators from Layer 1
 Alerting on degradation
 ```
 
+## DSPy Integration
+
+### Approach: Sequential Component Optimization
+
+We preserve the modular prompt structure from `prompts.py` by optimizing one component at a time. This gives us:
+- **Attribution**: Know exactly which component improved
+- **Linear search space**: `components × variants` instead of exponential
+- **Preservation**: Keep the modular structure, don't collapse to monolithic string
+
+**Algorithm:**
+```
+for each component in [IDENTITY, CONFIDENCE_LEVELS, ...]:
+    1. Generate N variants of this component (using LLM + failure examples)
+    2. Build full prompts = (frozen components) + (each variant)
+    3. Evaluate all variants on training queries
+    4. Pick best variant, freeze it
+    5. Move to next component
+```
+
+**Architecture:**
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Variant Generator (DSPy)                      │
+│                                                                   │
+│  Input: component name, current text, failure examples           │
+│  Output: N improved variants of the component                    │
+└─────────────────────────────────────────────────────────────────┘
+                                  │
+                                  ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                     Prompt Assembly                              │
+│                                                                   │
+│  Compose: frozen_components + variant → full system prompt       │
+│  Mirrors logic from prompts.build_prompt()                       │
+└─────────────────────────────────────────────────────────────────┘
+                                  │
+                                  ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    Agent Evaluation                              │
+│                                                                   │
+│  Run agent on training queries with composed prompt              │
+│  Score with LLM-as-judge evaluators                              │
+└─────────────────────────────────────────────────────────────────┘
+                                  │
+                                  ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    Best Variant Selection                        │
+│                                                                   │
+│  Pick variant with highest average score                         │
+│  Freeze this component, move to next                             │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Code:** See `docs/plans/2025-12-18-dspy-sequential-optimizer.py`
+
+### Evaluator → Component Mapping
+
+When evaluators detect failures, we map them to relevant components for targeted improvement:
+
+| Evaluator | Relevant Components |
+|-----------|---------------------|
+| `tool_selection` | CHOOSING_SOURCES, AVAILABLE_TOOLS |
+| `hallucination` | CONFIDENCE_LEVELS, CITATIONS |
+| `completeness` | QUERY_DECOMPOSITION, REPORTING_RESULTS |
+| `confidence_communication` | CONFIDENCE_LEVELS |
+| `research_depth` | RESEARCH_METHODOLOGY |
+| `solution_evaluation` | ENGINEERING_JUDGMENT |
+| `ambiguity_handling` | HANDLING_AMBIGUITY |
+| `citation_quality` | CITATIONS |
+| `source_selection` | CHOOSING_SOURCES |
+
+This mapping lets us prioritize which components to optimize based on which evaluators are failing most.
+
+---
+
+## MVP Scope
+
+### What's In
+
+1. **3 evaluators** (highest signal):
+   - `tool_selection` - Did it use the right tools?
+   - `hallucination` - Did it make stuff up?
+   - `completeness` - Did it answer the whole question?
+
+2. **DSPy wrapper module** wrapping PydanticAI agent
+
+3. **CLI for on-demand evaluation:**
+   ```bash
+   # Evaluate specific queries
+   python -m sensei.eval.judge --query-id <id>
+
+   # Run optimization
+   python -m sensei.eval.optimize --num-examples 20
+
+   # Validate improvement
+   python -m sensei.eval.validate --old-prompt prompts.py --new-prompt optimized.txt
+   ```
+
+4. **Simple storage:** Evaluation reports as JSON files (no new DB tables)
+
+### What's Out (Phase 2+)
+
+- All 15 evaluators (start with 3, add incrementally)
+- Production sampling
+- Automatic prompt deployment
+- Fancy dashboards
+
+---
+
 ## Open Questions
 
-1. **Evaluator model:** Which model for LLM-as-judge? Same as sensei or different?
-2. **Rubric design:** How detailed should evaluation rubrics be?
-3. **DSPy optimizer choice:** BootstrapFewShot vs MIPRO vs other?
-4. **Storage:** Where to store evaluation reports? New table? Logfire?
-5. **Dataset curation:** How do we select queries for the test set?
+1. **Evaluator model:** Which model for LLM-as-judge? (Suggest: same as sensei for consistency)
+2. **Dataset curation:** How do we select queries for the test set? (Suggest: start with queries that have low ratings)
+3. **Prompt diffing:** How do we present before/after prompt changes for review?
 
 ## Next Steps
 
-- [ ] Implement first evaluator (tool_selection) as proof of concept
-- [ ] Integrate with existing pydantic-evals infrastructure
-- [ ] Define evaluation dataset from existing queries
-- [ ] Set up DSPy integration for optimization loop
-- [ ] Build validator comparison tooling
+- [ ] Implement 3 MVP evaluators (tool_selection, hallucination, completeness)
+- [ ] Build SenseiWrapper DSPy module
+- [ ] Create CLI for evaluation and optimization
+- [ ] Curate initial dataset from existing queries with ratings
+- [ ] Run first optimization cycle and review results
