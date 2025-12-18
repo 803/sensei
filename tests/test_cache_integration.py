@@ -28,25 +28,3 @@ async def test_cache_search_and_retrieve_flow(integration_db):
     assert isinstance(get_result, Success)
     assert "React Hooks" in get_result.data
     assert "functional components" in get_result.data
-
-
-@pytest.mark.asyncio
-async def test_parent_child_query_relationship(integration_db):
-    """Test sub-query parent relationship is preserved."""
-    # Create parent
-    parent_id = await storage.save_query(
-        query="Why are my React hooks breaking?",
-        output="# Analysis\n\nLet me break this down...",
-    )
-
-    # Create child
-    child_id = await storage.save_query(
-        query="How do React hooks work?",
-        output="# React Hooks Basics\n\n...",
-        parent_id=parent_id,
-    )
-
-    # Verify relationship
-    child = await storage.get_query(child_id)
-    assert child is not None
-    assert child.parent_id == parent_id

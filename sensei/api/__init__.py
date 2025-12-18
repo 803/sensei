@@ -1,8 +1,9 @@
 """REST API server for Sensei.
 
 Provides HTTP endpoints for non-MCP clients:
-- POST /query - Query Sensei for documentation
-- POST /query/stream - Streaming query results (NDJSON)
+- POST /query - Query Sensei for documentation (saves to DB)
+- POST /query/stream - Streaming query results as NDJSON (saves to DB)
+- POST /api/chat - Vercel AI SDK streaming endpoint (lightweight, no DB save)
 - POST /rate - Rate a query response
 - GET /health - Health check
 
@@ -16,13 +17,21 @@ import logging
 from contextlib import asynccontextmanager
 from dataclasses import asdict
 from datetime import datetime
+from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
+from pydantic import ValidationError
 from pydantic_ai import messages, run
 from pydantic_ai.exceptions import ModelHTTPError
+from pydantic_ai.ui.vercel_ai import VercelAIAdapter
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 
 from sensei import core
+from sensei.agent import agent
 from sensei.api.models import (
     HealthResponse,
     QueryRequest,
@@ -30,16 +39,19 @@ from sensei.api.models import (
     RatingRequest,
     RatingResponse,
 )
+from sensei.build import build_deps
+from sensei.database.local import ensure_db_ready
 from sensei.types import BrokenInvariant, ToolError, TransientError
 
 logger = logging.getLogger(__name__)
+
+# Rate limiter with in-memory storage (default)
+limiter = Limiter(key_func=get_remote_address)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Ensure database is ready before handling requests."""
-    from sensei.database.local import ensure_db_ready
-
     await ensure_db_ready()
     yield
 
@@ -50,6 +62,19 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://sensei.eightzerothree.co", "http://localhost:3000"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 @app.post("/query", response_model=QueryResponse)
@@ -87,6 +112,67 @@ async def query(request: QueryRequest) -> QueryResponse:
     except ModelHTTPError as e:
         logger.error(f"Unexpected error: {e}")
         raise HTTPException(status_code=500, detail=f"{e}")
+
+
+def _extract_prompt_from_vercel_body(body: bytes) -> str | None:
+    """Extract user's last message from Vercel AI SDK body.
+
+    Parses the documented Vercel AI SDK format, not internal PydanticAI structures.
+    """
+    try:
+        data = json.loads(body)
+        for msg in reversed(data.get("messages", [])):
+            if msg.get("role") == "user":
+                content = msg.get("content", "")
+                if isinstance(content, str):
+                    return content if content.strip() else None
+                # Handle content array format (multimodal messages)
+                if isinstance(content, list):
+                    text = "".join(p.get("text", "") for p in content if p.get("type") == "text")
+                    return text if text.strip() else None
+        return None
+    except (json.JSONDecodeError, KeyError, TypeError):
+        return None
+
+
+@app.post("/api/chat")
+@limiter.limit("3/minute")
+async def chat(request: Request):
+    """Vercel AI SDK-compatible chat endpoint (SSE).
+
+    Lightweight streaming endpoint for the frontend demo.
+    Does not save queries to DB (no feedback/caching).
+    """
+    body = await request.body()
+    try:
+        run_input = VercelAIAdapter.build_run_input(body)
+    except ValidationError as e:
+        return Response(
+            content=e.json(),
+            media_type="application/json",
+            status_code=422,
+        )
+
+    # Extract prompt from documented Vercel format (not internal PydanticAI structures)
+    prompt = _extract_prompt_from_vercel_body(body)
+    if prompt is None:
+        raise HTTPException(status_code=422, detail="Missing user text message in 'messages'")
+
+    logger.info(f"POST /api/chat: {prompt[:100]}{'...' if len(prompt) > 100 else ''}")
+
+    # Build deps with cache prefetch (root query, no ctx)
+    deps = await build_deps(prompt)
+
+    adapter = VercelAIAdapter(
+        agent=agent,
+        run_input=run_input,
+        accept=request.headers.get("accept"),
+    )
+    response = adapter.streaming_response(adapter.run_stream(deps=deps))
+    response.headers.setdefault("Cache-Control", "no-cache")
+    response.headers.setdefault("Connection", "keep-alive")
+    response.headers.setdefault("X-Accel-Buffering", "no")
+    return response
 
 
 def _json_default(obj):
@@ -220,6 +306,23 @@ async def health() -> HealthResponse:
         Health status response
     """
     return HealthResponse(status="healthy")
+
+
+@app.get("/opencode")
+async def opencode_installer() -> FileResponse:
+    """Installer script for the Sensei OpenCode plugin/tools."""
+    candidates = [
+        _REPO_ROOT / "packages" / "sensei-opencode" / "dist" / "install.sh",
+        _REPO_ROOT / "packages" / "sensei-opencode" / "src" / "install.sh",
+    ]
+    for path in candidates:
+        if path.exists():
+            return FileResponse(
+                path=path,
+                media_type="text/plain; charset=utf-8",
+                filename="sensei-opencode-install.sh",
+            )
+    raise HTTPException(status_code=404, detail="OpenCode installer not found")
 
 
 @app.exception_handler(404)

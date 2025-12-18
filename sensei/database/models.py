@@ -56,7 +56,6 @@ class Query(TimestampMixin, Base):
     version = Column(String, nullable=True)  # Version specification
     output = Column(Text, nullable=False)  # Final text output from agent
     messages = Column(JSONB, nullable=True)  # All intermediate messages (tool calls, results)
-    parent_id = Column(UUID(as_uuid=True), ForeignKey("queries.id"), nullable=True)
     # Full-text search vector for efficient cache search
     query_tsvector = Column(
         TSVECTOR,

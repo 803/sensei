@@ -32,6 +32,7 @@ dependencies = [
     "pydantic-settings>=2.11.7",
     "pydantic>=2.11.7",
     "ruff>=0.14.6",
+    "slowapi>=0.1.9",
     "sqlalchemy[asyncio]>=2.0.44",
     "tldextract>=5.1.0",
     "uvicorn[standard]>=0.38.0",

@@ -13,13 +13,17 @@ import json
 import re
 import subprocess
 import sys
-from importlib.metadata import PackageNotFoundError, version as get_installed_version
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as get_installed_version
 from pathlib import Path
+
+from sensei.types import BrokenInvariant
 
 ROOT = Path(__file__).parent.parent
 README = ROOT / "README.md"
 PLUGIN_JSON = ROOT / "packages" / "sensei-claude-code" / ".claude-plugin" / "plugin.json"
 PACKAGE_JSON = ROOT / "package.json"
+OPENCODE_PACKAGE_JSON = ROOT / "packages" / "sensei-opencode" / "package.json"
 
 PACKAGE_NAME = "sensei-ai"
 
@@ -99,8 +103,11 @@ def serialize_plugin_json(data: dict) -> str:
 
 
 def read_file(path: Path) -> str:
-    """Read file content. Raises FileNotFoundError if missing."""
-    return path.read_text()
+    """Read file content. Raises BrokenInvariant if missing."""
+    try:
+        return path.read_text()
+    except FileNotFoundError:
+        raise BrokenInvariant(f"Required file not found: {path}")
 
 
 def write_file(path: Path, content: str) -> None:
@@ -124,7 +131,7 @@ def sync_readme(version: str) -> str | None:
     new_content, badge_found = transform_readme(content, version)
 
     if not badge_found:
-        return "WARNING: Version badge not found in README.md"
+        raise BrokenInvariant("Version badge not found in README.md")
 
     if new_content != content:
         write_file(README, new_content)
@@ -136,9 +143,6 @@ def sync_readme(version: str) -> str | None:
 
 def sync_plugin_json(version: str) -> str | None:
     """Sync plugin.json. Returns status message or None if unchanged."""
-    if not PLUGIN_JSON.exists():
-        return "WARNING: plugin.json not found"
-
     content = read_file(PLUGIN_JSON)
     data = json.loads(content)
     new_data, changed = transform_plugin_json(data, version)
@@ -153,9 +157,6 @@ def sync_plugin_json(version: str) -> str | None:
 
 def sync_package_json(version: str) -> str | None:
     """Sync package.json. Returns status message or None if unchanged."""
-    if not PACKAGE_JSON.exists():
-        return "WARNING: package.json not found"
-
     content = read_file(PACKAGE_JSON)
     data = json.loads(content)
     new_data, changed = transform_plugin_json(data, version)
@@ -168,6 +169,20 @@ def sync_package_json(version: str) -> str | None:
     return None
 
 
+def sync_opencode_package_json(version: str) -> str | None:
+    """Sync @sensei-ai/opencode package.json. Returns status message or None if unchanged."""
+    content = read_file(OPENCODE_PACKAGE_JSON)
+    data = json.loads(content)
+    new_data, changed = transform_plugin_json(data, version)
+
+    if changed:
+        write_file(OPENCODE_PACKAGE_JSON, serialize_plugin_json(new_data))
+        stage_file(OPENCODE_PACKAGE_JSON)
+        return "packages/sensei-opencode/package.json"
+
+    return None
+
+
 def main() -> int:
     """Main entry point."""
     try:
@@ -175,31 +190,29 @@ def main() -> int:
     except ValueError as e:
         print(f"ERROR: {e}", file=sys.stderr)
         return 1
+    except BrokenInvariant as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        return 1
 
     print(f"Version from package metadata: {version}")
 
     updated = []
-    warnings = []
 
-    for sync_fn in [sync_readme, sync_plugin_json, sync_package_json]:
-        result = sync_fn(version)
-        if result is None:
-            continue
-        if result.startswith("WARNING:"):
-            warnings.append(result)
-        else:
-            updated.append(result)
-
-    for warning in warnings:
-        print(warning, file=sys.stderr)
+    try:
+        for sync_fn in [sync_readme, sync_plugin_json, sync_package_json, sync_opencode_package_json]:
+            result = sync_fn(version)
+            if result is not None:
+                updated.append(result)
+    except BrokenInvariant as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        return 1
 
     if updated:
         print(f"Updated and staged: {', '.join(updated)}")
     else:
         print("All versions already in sync")
 
-    # Return error if warnings (badge missing, etc.)
-    return 1 if warnings else 0
+    return 0
 
 
 if __name__ == "__main__":

@@ -1,20 +1,18 @@
 """PydanticAI agent definition for Sensei."""
 
-import json
 import logging
-from datetime import datetime, timezone
 
 from pydantic_ai import Agent, RunContext, Tool
 
 from sensei import deps as deps_module
-from sensei.database import storage
+from sensei.build import build_deps
 from sensei.prompts import build_prompt
 from sensei.settings import general_settings, sensei_settings
 from sensei.tools.common import wrap_tool
 from sensei.tools.context7 import create_context7_server
 from sensei.tools.exec_plan import add_exec_plan, update_exec_plan
-from sensei.tools.scout import create_scout_server
 from sensei.tools.grep import create_grep_server
+from sensei.tools.scout import create_scout_server
 from sensei.tools.tavily import create_tavily_server
 from sensei.tools.tome import create_tome_server
 from sensei.types import ToolError
@@ -66,25 +64,6 @@ def event_stream_handler(*args, **kwargs):
 
 
 # =============================================================================
-# Sub-Agent Helpers
-# =============================================================================
-
-
-def _compute_age_days(inserted_at) -> int:
-    """Compute age in days from inserted_at timestamp."""
-    if inserted_at is None:
-        return 0
-    now = datetime.now(timezone.utc)
-    delta = now - inserted_at
-    return delta.days
-
-
-def _format_cached_result(output: str, age_days: int) -> str:
-    """Format cached result with age indicator."""
-    return f"[From cache ({age_days} days old)]\n\n{output}"
-
-
-# =============================================================================
 # Agent Factory
 # =============================================================================
 
@@ -92,61 +71,28 @@ def _format_cached_result(output: str, age_days: int) -> str:
 async def spawn_sub_agent(
     ctx: RunContext[deps_module.Deps],
     sub_question: str,
-    max_depth: int | None = None,
 ) -> str:
     """Spawn a sub-agent to answer a focused sub-question.
 
     Use this to decompose complex questions into simpler sub-questions.
-    Each sub-question gets answered independently and cached.
+    Sub-agents always generate fresh content (no cache lookup).
 
     Args:
-        ctx: Run context with depth tracking
+        ctx: Run context with parent deps
         sub_question: The focused sub-question to answer
-        max_depth: Override max recursion depth (optional)
 
     Returns:
-        The sub-agent's answer (cached automatically)
+        The sub-agent's answer, or error message if depth limit exceeded
     """
-    if not ctx.deps or not ctx.deps.query_id:
-        raise ToolError("Missing query_id in context")
+    logger.info(f"Spawning sub-agent: question={sub_question[:50]}...")
 
-    current_depth = ctx.deps.current_depth
-    effective_max = max_depth if max_depth is not None else ctx.deps.max_depth
+    try:
+        sub_deps = await build_deps(sub_question, ctx)
+    except ToolError as e:
+        return str(e)  # Return error message for agent to see
 
-    if current_depth >= effective_max:
-        return f"Cannot spawn sub-agent: at max depth ({current_depth}/{effective_max})"
-
-    logger.info(f"Spawning sub-agent: depth={current_depth + 1}, question={sub_question[:50]}...")
-
-    # Check cache first
-    hits = await storage.search_queries(sub_question, limit=1)
-    if hits:
-        query = await storage.get_query(hits[0].id)
-        if query:
-            logger.info(f"Sub-question cache hit: {query.id}")
-            age_days = _compute_age_days(query.inserted_at)
-            return _format_cached_result(query.output, age_days)
-
-    # No cache hit - run sub-agent
     sub_agent = create_sub_agent()
-    sub_deps = deps_module.Deps(
-        query_id=ctx.deps.query_id,
-        parent_id=ctx.deps.query_id,
-        current_depth=current_depth + 1,
-        max_depth=effective_max,
-    )
-
     result = await sub_agent.run(sub_question, deps=sub_deps)
-
-    # Cache the result
-    messages = json.loads(result.new_messages_json())
-    await storage.save_query(
-        query=sub_question,
-        output=result.output,
-        messages=messages,
-        parent_id=ctx.deps.query_id,
-    )
-
     logger.info("Sub-agent completed")
     return result.output
 

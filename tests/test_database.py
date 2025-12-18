@@ -78,30 +78,6 @@ async def test_get_query_not_found(test_db):
 
 
 @pytest.mark.asyncio
-async def test_save_query_with_parent(test_db):
-    """Test saving a sub-query with parent reference."""
-    # Create parent query
-    parent_id = await storage.save_query(query="Main question?", output="Main answer")
-
-    # Create child query
-    child_id = await storage.save_query(
-        query="Sub question?",
-        output="Sub answer",
-        parent_id=parent_id,
-    )
-
-    # Verify child has correct parent
-    child = await storage.get_query(child_id)
-    assert child is not None
-    assert child.parent_id == parent_id
-
-    # Verify parent has no parent
-    parent = await storage.get_query(parent_id)
-    assert parent is not None
-    assert parent.parent_id is None
-
-
-@pytest.mark.asyncio
 async def test_search_queries(test_db):
     """Test search queries using FTS."""
     # Insert test data
@@ -774,34 +750,6 @@ async def test_document_url_uniqueness(test_db):
             content_hash=_hash("Version 2"),
             generation_id=generation_id,
         )
-
-
-@pytest.mark.asyncio
-async def test_query_parent_child_chain(test_db):
-    """Test multi-level parent-child query chain."""
-    # Create chain: root -> child -> grandchild
-    root_id = await storage.save_query(query="Root query", output="Root answer")
-
-    child_id = await storage.save_query(
-        query="Child query",
-        output="Child answer",
-        parent_id=root_id,
-    )
-
-    grandchild_id = await storage.save_query(
-        query="Grandchild query",
-        output="Grandchild answer",
-        parent_id=child_id,
-    )
-
-    # Verify chain
-    root = await storage.get_query(root_id)
-    child = await storage.get_query(child_id)
-    grandchild = await storage.get_query(grandchild_id)
-
-    assert root.parent_id is None
-    assert child.parent_id == root_id
-    assert grandchild.parent_id == child_id
 
 
 @pytest.mark.asyncio

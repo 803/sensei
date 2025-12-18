@@ -62,7 +62,6 @@ async def save_query(
     language: Optional[str] = None,
     library: Optional[str] = None,
     version: Optional[str] = None,
-    parent_id: Optional[UUID] = None,
 ) -> UUID:
     """Save a query and its response to the database.
 
@@ -73,12 +72,11 @@ async def save_query(
         language: Optional programming language filter
         library: Optional library/framework name
         version: Optional version specification
-        parent_id: Optional parent query ID for sub-queries
 
     Returns:
         The generated UUID for the saved query
     """
-    logger.info(f"Saving query to database: parent={parent_id}")
+    logger.info("Saving query to database")
     async with AsyncSessionLocal() as session:
         query_record = Query(
             query=query,
@@ -87,7 +85,6 @@ async def save_query(
             version=version,
             output=output,
             messages=messages,
-            parent_id=parent_id,
         )
         session.add(query_record)
         await session.commit()

@@ -214,7 +214,6 @@ class CacheHit(BaseModel):
     version: str | None = None
     output: str
     messages: str | None = None
-    parent_id: UUID | None = None
     inserted_at: datetime
     updated_at: datetime
 

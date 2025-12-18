@@ -166,31 +166,24 @@ async def test_get_cached_response_not_found():
 
 
 def test_deps_has_cache_fields():
-    """Test Deps has fields for sub-sensei context."""
+    """Test Deps has fields for cache hits and depth tracking."""
     from sensei.deps import Deps
 
-    query_uuid = UUID("11111111-1111-1111-1111-111111111111")
-    parent_uuid = UUID("22222222-2222-2222-2222-222222222222")
     deps = Deps(
-        query_id=query_uuid,
-        parent_id=parent_uuid,
+        cache_hits=[],
         current_depth=1,
-        max_depth=2,
     )
-    assert deps.parent_id == parent_uuid
+    assert deps.cache_hits == []
     assert deps.current_depth == 1
-    assert deps.max_depth == 2
 
 
 def test_deps_cache_fields_default():
-    """Test Deps cache fields have sensible defaults."""
+    """Test Deps fields have sensible defaults."""
     from sensei.deps import Deps
 
-    query_uuid = UUID("11111111-1111-1111-1111-111111111111")
-    deps = Deps(query_id=query_uuid)
-    assert deps.parent_id is None
+    deps = Deps()
+    assert deps.cache_hits == []
     assert deps.current_depth == 0
-    assert deps.max_depth == 2
 
 
 def test_create_sub_agent_exists():
@@ -222,15 +215,14 @@ async def test_spawn_sub_agent_checks_depth():
     from sensei.agent import spawn_sub_agent
     from sensei.deps import Deps
 
-    # Create mock context at max depth
-    query_uuid = UUID("11111111-1111-1111-1111-111111111111")
+    # Create mock context at max depth (max_recursion_depth defaults to 2)
     mock_ctx = MagicMock(spec=RunContext)
-    mock_ctx.deps = Deps(query_id=query_uuid, current_depth=2, max_depth=2)
+    mock_ctx.deps = Deps(current_depth=2)
 
     result = await spawn_sub_agent(mock_ctx, "What is X?")
 
-    # Should return error string about max depth
-    assert "max depth" in result.lower()
+    # Should return error string about depth limit
+    assert "depth limit exceeded" in result.lower()
 
 
 def test_main_agent_has_exec_plan_tools():
