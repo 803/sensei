@@ -1,7 +1,7 @@
 """Unified MCP server for Sensei.
 
 Mounts all sub-servers into a single MCP endpoint:
-- sensei_query, sensei_feedback (core)
+- query, feedback (core)
 - scout_glob, scout_read, scout_grep, scout_tree
 - kura_search, kura_get
 - tome_get, tome_search
@@ -10,7 +10,7 @@ Usage:
     from sensei import mcp
     mcp.run()  # stdio transport
     # or
-    app = mcp.http_app(path="/mcp")  # HTTP transport
+    app = mcp.http_app(path="/")  # HTTP transport (use path="/" when mounting)
 """
 
 from contextlib import asynccontextmanager
@@ -36,7 +36,7 @@ async def lifespan(server):
 mcp = FastMCP(name="sensei", lifespan=lifespan)
 
 # Mount all sub-servers with prefixes
-mcp.mount(sensei_mcp, prefix="sensei")
+mcp.mount(sensei_mcp)
 mcp.mount(scout_mcp, prefix="scout")
 mcp.mount(kura_mcp, prefix="kura")
 mcp.mount(tome_mcp, prefix="tome")

@@ -4,8 +4,8 @@ Provides the main sensei tools:
 - query: Ask questions about libraries and frameworks
 - feedback: Rate responses to improve quality
 
-This server is mounted by the unified server in __main__.py with prefix "sensei",
-so tools are accessible as sensei_query, sensei_feedback.
+This server is mounted by the unified server without a prefix,
+so tools are accessible as query, feedback.
 """
 
 import logging

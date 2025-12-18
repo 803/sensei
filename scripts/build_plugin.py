@@ -30,7 +30,7 @@ name: documentation-research
 description: >-
   Use when researching library documentation, framework APIs, best practices,
   or troubleshooting external code - teaches research methodology for finding
-  the right answer, with sensei_query for complex multi-source research
+  the right answer, with the query tool for complex multi-source research
 ---
 
 """

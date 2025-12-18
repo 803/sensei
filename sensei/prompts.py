@@ -342,20 +342,20 @@ SKILL_INTRO = dedent("""\
     APIs, framework patterns, best practices, or troubleshooting external code.
     """)
 
-SKILL_SENSEI_QUERY = dedent("""\
-    ## The sensei_query Tool
+SKILL_QUERY_TOOL = dedent("""\
+    ## The query Tool
 
-    For complex, multi-source research, use `sensei_query`. It handles:
+    For complex, multi-source research, use `query`. It handles:
     - **Query decomposition** — breaks complex questions into focused sub-queries
     - **Multi-source search** — searches official docs, GitHub, web, and cached results
     - **Confidence scoring** — ranks results by source authority
     - **Caching** — stores results for instant retrieval on similar questions
 
     ```
-    sensei_query(query="How to implement middleware auth in Next.js 15 App Router")
+    query(query="How to implement middleware auth in Next.js 15 App Router")
     ```
 
-    Use sensei_query when:
+    Use the query tool when:
     - The question spans multiple topics or sources
     - You need authoritative, up-to-date documentation
     - The question might benefit from cached previous research
@@ -419,7 +419,7 @@ def build_prompt(context: Context) -> str:
             - "full_mcp": Full PydanticAI agent with all capabilities
             - "sub_agent_mcp": Restricted sub-agent (no spawning)
             - "claude_code": Claude Code subagent (executes research)
-            - "claude_code_skill": Claude Code skill (orchestrates sensei_query)
+            - "claude_code_skill": Claude Code skill (orchestrates query tool)
 
     Returns:
         Complete system prompt string
@@ -431,9 +431,9 @@ def build_prompt(context: Context) -> str:
     # Skill teaches research methodology with tool guidance
     if context == "claude_code_skill":
         parts = [
-            # Introduction and sensei_query (the easy path)
+            # Introduction and query tool (the easy path)
             SKILL_INTRO,
-            SKILL_SENSEI_QUERY,
+            SKILL_QUERY_TOOL,
             # Core research methodology
             RESEARCH_METHODOLOGY,
             ENGINEERING_JUDGMENT,

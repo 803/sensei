@@ -4,7 +4,7 @@ Usage:
     from sensei import mcp
     mcp.run()  # stdio transport
     # or
-    app = mcp.http_app(path="/mcp")  # HTTP transport
+    app = mcp.http_app(path="/")  # HTTP transport (use path="/" when mounting)
 
 For sub-modules:
     from sensei.kura import mcp as kura_mcp

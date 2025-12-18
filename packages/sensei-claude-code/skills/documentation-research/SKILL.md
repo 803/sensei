@@ -3,7 +3,7 @@ name: documentation-research
 description: >-
   Use when researching library documentation, framework APIs, best practices,
   or troubleshooting external code - teaches research methodology for finding
-  the right answer, with sensei_query for complex multi-source research
+  the right answer, with the query tool for complex multi-source research
 ---
 
 # Documentation Research
@@ -12,19 +12,19 @@ This skill teaches effective documentation research — finding the *right*
 answer, not just *an* answer. Use these techniques when researching library
 APIs, framework patterns, best practices, or troubleshooting external code.
 
-## The sensei_query Tool
+## The query Tool
 
-For complex, multi-source research, use `sensei_query`. It handles:
+For complex, multi-source research, use `query`. It handles:
 - **Query decomposition** — breaks complex questions into focused sub-queries
 - **Multi-source search** — searches official docs, GitHub, web, and cached results
 - **Confidence scoring** — ranks results by source authority
 - **Caching** — stores results for instant retrieval on similar questions
 
 ```
-sensei_query(query="How to implement middleware auth in Next.js 15 App Router")
+query(query="How to implement middleware auth in Next.js 15 App Router")
 ```
 
-Use sensei_query when:
+Use the query tool when:
 - The question spans multiple topics or sources
 - You need authoritative, up-to-date documentation
 - The question might benefit from cached previous research
