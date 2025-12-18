@@ -52,8 +52,8 @@ logger = logging.getLogger(__name__)
 # Rate limiter with in-memory storage (default)
 limiter = Limiter(key_func=get_remote_address)
 
-# Create MCP ASGI app for mounting
-mcp_app = mcp.http_app(path="/")
+# Create MCP ASGI app for mounting (stateless to avoid session ID issues after restarts)
+mcp_app = mcp.http_app(path="/", stateless_http=True)
 
 
 @asynccontextmanager

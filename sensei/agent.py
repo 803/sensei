@@ -105,6 +105,7 @@ def create_agent(
     include_exec_plan: bool = True,
     instrument: bool | object = True,
     model: object | None = None,
+    system_prompt: str | None = None,
 ) -> Agent[deps_module.Deps, str]:
     """Create an agent with configurable tools.
 
@@ -113,6 +114,7 @@ def create_agent(
         include_exec_plan: Include exec plan tools (False for sub-agents)
         instrument: Instrumentation config (True for default tracing, or custom settings)
         model: Model to use (defaults to DEFAULT_MODEL)
+        system_prompt: Override the default system prompt (for optimization/testing)
 
     Returns:
         Configured Agent instance
@@ -126,7 +128,7 @@ def create_agent(
 
     return Agent(
         model=model or sensei_settings.model,
-        system_prompt=SYSTEM_PROMPT,
+        system_prompt=system_prompt or SYSTEM_PROMPT,
         deps_type=deps_module.Deps,
         output_type=str,
         model_settings=GoogleModelSettings(google_thinking_config={"thinking_level": "high", "include_thoughts": True}),

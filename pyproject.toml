@@ -50,6 +50,7 @@ start = "sensei.api.__main__:main"
 scout = "sensei.scout:main"
 kura = "sensei.kura:main"
 tome = "sensei.tome:main"
+dojo = "sensei.dojo:main"
 
 [project.optional-dependencies]
 dev = [
