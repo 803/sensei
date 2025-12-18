@@ -11,6 +11,7 @@ so tools are accessible as sensei_query, sensei_feedback.
 import logging
 from typing import Annotated
 
+import sentry_sdk
 from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError as MCPToolError
 from pydantic import Field
@@ -74,12 +75,15 @@ async def query(
         logger.debug(f"Query successful: query_id={result.query_id}, length={len(result.output)}")
         return result.output
     except BrokenInvariant as e:
+        sentry_sdk.capture_exception(e)
         logger.error(f"Service misconfigured: {e}", exc_info=True)
         raise MCPToolError(f"Service misconfigured: {e}")
     except TransientError as e:
+        sentry_sdk.capture_exception(e)
         logger.error(f"Service temporarily unavailable: {e}")
         raise MCPToolError(f"Service temporarily unavailable: {e}")
     except ToolError as e:
+        sentry_sdk.capture_exception(e)
         logger.error(f"Query failed: {e}")
         raise MCPToolError(f"Query failed: {e}")
 
@@ -140,5 +144,6 @@ async def feedback(
         logger.debug(f"Rating saved successfully for query_id={query_id}")
         return "Rating recorded. Thank you!"
     except Exception as e:
+        sentry_sdk.capture_exception(e)
         logger.error(f"Failed to save rating: {e}", exc_info=True)
         raise MCPToolError(f"Failed to save rating: {e}")

@@ -14,7 +14,7 @@ from sensei.prompts import build_prompt
 
 # Paths relative to repo root
 REPO_ROOT = Path(__file__).parent.parent
-PLUGIN_DIR = REPO_ROOT / "packages" / "marketplace" / "sensei"
+PLUGIN_DIR = REPO_ROOT / "packages" / "sensei-claude-code"
 AGENTS_DIR = PLUGIN_DIR / "agents"
 SENSEI_MD = AGENTS_DIR / "sensei.md"
 

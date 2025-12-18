@@ -2,7 +2,9 @@
 
 import logging
 
+import sentry_sdk
 from pydantic_ai import Agent, RunContext, Tool
+from pydantic_ai.models.google import GoogleModelSettings
 
 from sensei import deps as deps_module
 from sensei.build import build_deps
@@ -89,6 +91,7 @@ async def spawn_sub_agent(
     try:
         sub_deps = await build_deps(sub_question, ctx)
     except ToolError as e:
+        sentry_sdk.capture_exception(e)
         return str(e)  # Return error message for agent to see
 
     sub_agent = create_sub_agent()
@@ -126,6 +129,7 @@ def create_agent(
         system_prompt=SYSTEM_PROMPT,
         deps_type=deps_module.Deps,
         output_type=str,
+        model_settings=GoogleModelSettings(google_thinking_config={"thinking_level": "high", "include_thoughts": True}),
         toolsets=[
             create_context7_server(general_settings.context7_api_key),
             create_grep_server(),

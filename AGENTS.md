@@ -44,6 +44,39 @@ async def search_foo(...) -> Success[str] | NoResults:
     return Success(format_results(...))
 ```
 
+## Sentry Error Monitoring
+
+Sentry captures exceptions in production (when `SENTRY_DSN` is set). It's a no-op locally.
+
+**When to add `sentry_sdk.capture_exception(e)`:**
+
+Add it in catch blocks that **handle exceptions gracefully** (convert to HTTP responses, return error strings, etc.) but should still be tracked:
+
+```python
+except ToolError as e:
+    sentry_sdk.capture_exception(e)  # Track it
+    logger.error(f"Tool failed: {e}")
+    raise HTTPException(status_code=500, detail=str(e))  # Convert for client
+```
+
+**When NOT to add it:**
+
+- **Re-raised exceptions** - Sentry auto-captures unhandled exceptions
+- **User input errors** (ValidationError, 400s) - Not bugs, don't track
+- **Expected failures** (404s, empty results) - Not bugs, don't track
+
+**Instrumented locations:**
+
+| File | What's captured |
+|------|-----------------|
+| `sensei/api/__init__.py` | API endpoint errors (BrokenInvariant, TransientError, ToolError, ModelHTTPError) |
+| `sensei/server.py` | MCP tool errors (same exceptions, converted to MCPToolError) |
+| `sensei/tools/common.py` | Tool wrapper errors (TransientError, ToolError) |
+| `sensei/tome/crawler.py` | Crawler failures (decode errors, crawl failures, cleanup failures) |
+| `sensei/agent.py` | Sub-agent spawn errors (ToolError) |
+
+**Adding new catch blocks:** If you add a catch block that converts an exception (doesn't re-raise), add `sentry_sdk.capture_exception(e)` before converting.
+
 ## Result Types
 
 Tools return `Success[T] | NoResults`, never error strings. This separates "found nothing" from "something went wrong"—critical for the LLM to make good decisions.

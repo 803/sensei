@@ -14,6 +14,7 @@ import logging
 from datetime import timedelta
 from uuid import UUID, uuid4
 
+import sentry_sdk
 from crawlee import ConcurrencySettings, Request
 from crawlee.crawlers import BasicCrawlingContext, HttpCrawler, HttpCrawlingContext
 from crawlee.errors import HttpStatusCodeError
@@ -190,6 +191,7 @@ async def ingest_domain(domain: str, max_depth: int = 10) -> Success[IngestResul
         try:
             content = (await context.http_response.read()).decode("utf-8")
         except UnicodeDecodeError as e:
+            sentry_sdk.capture_exception(e)
             logger.error(f"Failed to decode content: {url}")
             result.failures.append(e)
             return
@@ -289,6 +291,7 @@ async def ingest_domain(domain: str, max_depth: int = 10) -> Success[IngestResul
         initial_request = Request.from_url(llms_txt_url, user_data={"depth": 0})
         await crawler.run([initial_request])
     except Exception as e:
+        sentry_sdk.capture_exception(e)
         logger.error(f"Crawl failed for {normalized_domain}: {e}")
         # Don't activate - leave orphan generation for cleanup
         raise TransientError(f"Crawl failed for {normalized_domain}: {e}") from e
@@ -307,6 +310,7 @@ async def ingest_domain(domain: str, max_depth: int = 10) -> Success[IngestResul
         logger.info(f"Cleaned up {deleted} old documents for {normalized_domain}")
     except Exception as e:
         # Cleanup failure is unexpected - record as failure
+        sentry_sdk.capture_exception(e)
         logger.error(f"Cleanup failed for {normalized_domain}: {e}")
         result.failures.append(e)
 

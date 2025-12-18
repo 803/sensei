@@ -12,7 +12,10 @@ Usage:
     python -m sensei.api -p 9000      # Custom port
 """
 
+import sensei.sentry  # noqa: F401 - must be first to instrument FastAPI
+
 import json
+import sentry_sdk
 import logging
 from contextlib import asynccontextmanager
 from dataclasses import asdict
@@ -101,35 +104,38 @@ async def query(request: QueryRequest) -> QueryResponse:
         logger.debug(f"Query successful: query_id={result.query_id}")
         return QueryResponse(query_id=result.query_id, output=result.output)
     except BrokenInvariant as e:
+        sentry_sdk.capture_exception(e)
         logger.error(f"Service misconfigured: {e}")
         raise HTTPException(status_code=503, detail=f"{e}")
     except TransientError as e:
+        sentry_sdk.capture_exception(e)
         logger.error(f"Service temporarily unavailable: {e}")
         raise HTTPException(status_code=503, detail=f"{e}")
     except ToolError as e:
+        sentry_sdk.capture_exception(e)
         logger.error(f"Internal error: {e}")
         raise HTTPException(status_code=500, detail=f"{e}")
     except ModelHTTPError as e:
+        sentry_sdk.capture_exception(e)
         logger.error(f"Unexpected error: {e}")
         raise HTTPException(status_code=500, detail=f"{e}")
 
 
 def _extract_prompt_from_vercel_body(body: bytes) -> str | None:
-    """Extract user's last message from Vercel AI SDK body.
+    """Extract user's last message from Vercel AI SDK v5 body.
 
-    Parses the documented Vercel AI SDK format, not internal PydanticAI structures.
+    AI SDK v5 DefaultChatTransport sends: { id, messages: [...], trigger }
+    Each message has: { id, role, parts: [{ type, text }] }
     """
     try:
         data = json.loads(body)
         for msg in reversed(data.get("messages", [])):
             if msg.get("role") == "user":
-                content = msg.get("content", "")
-                if isinstance(content, str):
-                    return content if content.strip() else None
-                # Handle content array format (multimodal messages)
-                if isinstance(content, list):
-                    text = "".join(p.get("text", "") for p in content if p.get("type") == "text")
-                    return text if text.strip() else None
+                for part in msg.get("parts", []):
+                    if part.get("type") == "text":
+                        text = part.get("text", "")
+                        if text.strip():
+                            return text
         return None
     except (json.JSONDecodeError, KeyError, TypeError):
         return None
@@ -250,6 +256,7 @@ async def query_stream(request: QueryRequest):
                         }
                     )
         except ModelHTTPError as e:
+            sentry_sdk.capture_exception(e)
             logger.error(f"Stream error: {e}")
             yield _stream_ndjson(
                 {
@@ -292,6 +299,7 @@ async def rate(request: RatingRequest) -> RatingResponse:
         logger.debug(f"Rating saved for query_id={request.query_id}")
         return RatingResponse(status="recorded")
     except Exception as e:
+        sentry_sdk.capture_exception(e)
         logger.error(f"Failed to save rating: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to save rating: {e}")
 

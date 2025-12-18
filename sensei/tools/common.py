@@ -3,6 +3,9 @@
 from functools import wraps
 from typing import Any, Callable
 
+import logfire
+import sentry_sdk
+
 from sensei.types import BrokenInvariant, NoResults, Success, ToolError, TransientError
 
 
@@ -28,8 +31,12 @@ def wrap_tool(fn: Callable) -> Callable:
                 case _:
                     return str(result)
         except TransientError as e:
+            sentry_sdk.capture_exception(e)
+            logfire.exception(str(e), tool=fn.__name__)
             return f"Tool temporarily unavailable: {e}"
         except ToolError as e:
+            sentry_sdk.capture_exception(e)
+            logfire.exception(str(e), tool=fn.__name__)
             return f"Tool failed: {e}"
         except BrokenInvariant:
             raise  # Config errors halt the agent
