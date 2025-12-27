@@ -1,5 +1,9 @@
 {
 	"permissions": {
-		"allow": ["mcp__plugin_sensei_sensei__scout_grep"]
+		"allow": [
+			"mcp__plugin_sensei_sensei__scout_grep",
+			"mcp__beads__context",
+			"Bash(git -C /Users/alizain/Experiments/sensei status)"
+		]
 	}
 }
